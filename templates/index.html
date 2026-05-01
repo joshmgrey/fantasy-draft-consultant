@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 PPR Draft Consultant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span { color: #3fb950; }
+
+    header p {
+      margin-top: 8px;
+      color: #8b949e;
+      font-size: 0.95rem;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 40px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 12px 16px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-box input:focus { border-color: #3fb950; }
+    .search-box input::placeholder { color: #484f58; }
+
+    .search-box button {
+      padding: 12px 22px;
+      background: #238636;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .search-box button:hover { background: #2ea043; }
+    .search-box button:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      color: #8b949e;
+      font-size: 0.9rem;
+    }
+
+    .spinner.active { display: flex; }
+
+    .spinner-ring {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #21262d;
+      border-top-color: #3fb950;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Result card */
+    .card {
+      display: none;
+      width: 100%;
+      max-width: 520px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card.visible { display: block; }
+
+    .card-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .card-header .player-name {
+      font-size: 1.35rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+
+    /* Verdict badge */
+    .verdict {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      width: fit-content;
+    }
+
+    .verdict.draft { background: #0d2818; color: #3fb950; border: 1px solid #238636; }
+    .verdict.pass  { background: #2d0f0f; color: #f85149; border: 1px solid #da3633; }
+
+    .verdict-icon { font-size: 1.2rem; }
+
+    /* Risk bar */
+    .risk-section label {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+
+    .risk-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .risk-bar-track {
+      flex: 1;
+      height: 8px;
+      background: #21262d;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .risk-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+
+    .risk-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      min-width: 36px;
+      text-align: right;
+      color: #e6edf3;
+    }
+
+    /* Reason */
+    .reason-section label {
+      display: block;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+
+    .reason-section p {
+      font-size: 0.95rem;
+      line-height: 1.55;
+      color: #c9d1d9;
+    }
+
+    /* Error */
+    .error-box {
+      display: none;
+      width: 100%;
+      max-width: 520px;
+      padding: 14px 18px;
+      background: #2d0f0f;
+      border: 1px solid #da3633;
+      border-radius: 8px;
+      color: #f85149;
+      font-size: 0.9rem;
+    }
+
+    .error-box.visible { display: block; }
+
+    footer {
+      margin-top: auto;
+      padding-top: 48px;
+      color: #484f58;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🏈 2026 PPR <span>Draft Consultant</span></h1>
+    <p>Powered by Claude Opus 4.7 + Live Web Search</p>
+  </header>
+
+  <div class="search-box">
+    <input
+      id="playerInput"
+      type="text"
+      placeholder="Enter player name (e.g. Ja'Marr Chase)"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+    />
+    <button id="analyzeBtn" onclick="analyze()">Analyze</button>
+  </div>
+
+  <div class="spinner" id="spinner">
+    <div class="spinner-ring"></div>
+    <span id="spinnerLabel">Researching…</span>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="card" id="resultCard">
+    <div class="card-header">
+      <div class="player-name" id="resultName"></div>
+    </div>
+    <div class="card-body">
+      <div class="verdict" id="resultVerdict">
+        <span class="verdict-icon" id="verdictIcon"></span>
+        <span id="verdictText"></span>
+      </div>
+      <div class="risk-section">
+        <label>Risk Score</label>
+        <div class="risk-row">
+          <div class="risk-bar-track">
+            <div class="risk-bar-fill" id="riskFill"></div>
+          </div>
+          <span class="risk-label" id="riskLabel"></span>
+        </div>
+      </div>
+      <div class="reason-section">
+        <label>Analysis</label>
+        <p id="resultReason"></p>
+      </div>
+    </div>
+  </div>
+
+  <footer>Risk scores and verdicts are AI-generated. Do your own research.</footer>
+
+  <script>
+    const input = document.getElementById('playerInput');
+    const btn   = document.getElementById('analyzeBtn');
+
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') analyze(); });
+
+    async function analyze() {
+      const name = input.value.trim();
+      if (!name) return;
+
+      setLoading(true);
+      hide('resultCard');
+      hide('errorBox');
+
+      try {
+        const res = await fetch('/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ player_name: name }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          showError(data.error || 'Something went wrong.');
+          return;
+        }
+
+        showResult(data);
+      } catch (err) {
+        showError('Network error — could not reach the server.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function showResult(d) {
+      document.getElementById('resultName').textContent = d.player;
+
+      const isDraft = d.verdict === 'Draft';
+      const verdictEl = document.getElementById('resultVerdict');
+      verdictEl.className = 'verdict ' + (isDraft ? 'draft' : 'pass');
+      document.getElementById('verdictIcon').textContent = isDraft ? '✅' : '❌';
+      document.getElementById('verdictText').textContent = isDraft ? 'DRAFT' : 'PASS';
+
+      const risk = d.risk_score ?? 0;
+      const pct  = (risk / 10) * 100;
+      const color = risk <= 3 ? '#3fb950' : risk <= 6 ? '#d29922' : '#f85149';
+      const fill  = document.getElementById('riskFill');
+      fill.style.width = pct + '%';
+      fill.style.background = color;
+      document.getElementById('riskLabel').textContent = risk + '/10';
+      document.getElementById('riskLabel').style.color = color;
+
+      document.getElementById('resultReason').textContent = d.reason ?? '—';
+
+      show('resultCard');
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      show('errorBox');
+    }
+
+    function setLoading(on) {
+      btn.disabled = on;
+      btn.textContent = on ? 'Analyzing…' : 'Analyze';
+      document.getElementById('spinner').classList.toggle('active', on);
+      if (on) {
+        const names = ['Researching…', 'Checking projections…', 'Scanning news…', 'Assessing risk…'];
+        let i = 0;
+        window._spinnerInterval = setInterval(() => {
+          document.getElementById('spinnerLabel').textContent = names[i++ % names.length];
+        }, 2500);
+      } else {
+        clearInterval(window._spinnerInterval);
+      }
+    }
+
+    function show(id) { document.getElementById(id).classList.add('visible'); }
+    function hide(id) { document.getElementById(id).classList.remove('visible'); }
+  </script>
+</body>
+</html>
