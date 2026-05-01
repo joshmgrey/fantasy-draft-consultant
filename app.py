@@ -32,6 +32,9 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = ""
 
+with app.app_context():
+    db.create_all()
+
 FREE_QUERY_LIMIT = 10
 
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
@@ -351,6 +354,4 @@ if __name__ == "__main__":
         print("Error: ANTHROPIC_API_KEY environment variable is not set.")
         print("Run: export ANTHROPIC_API_KEY=sk-ant-...")
         sys.exit(1)
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
