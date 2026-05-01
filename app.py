@@ -23,7 +23,8 @@ STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///app.db")
+_db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db").replace("postgres://", "postgresql://")
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
