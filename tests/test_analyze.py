@@ -2,77 +2,78 @@ import json
 import pytest
 from unittest.mock import patch
 from tests.conftest import login
-from app import _validate_player_name, _parse_verdict
+from app.analysis.domain.services import validate_player_name, parse_verdict
+from app.analysis.infrastructure import anthropic_client as ac_module
+
+MOCK_VERDICT_DICT = {"player": "Justin Jefferson", "risk_score": 2, "verdict": "Draft", "reason": "Top WR value at his ADP."}
 
 
-MOCK_RESULT = {"player": "Justin Jefferson", "risk_score": 2, "verdict": "Draft", "reason": "Top WR value at his ADP."}
+def _mock_verdict():
+    from app.analysis.domain.models import PlayerVerdict
+    return PlayerVerdict(player="Justin Jefferson", risk_score=2, verdict="Draft", reason="Top WR value at his ADP.")
 
 
 # ---------------------------------------------------------------------------
-# Unit: _validate_player_name
+# Unit: validate_player_name
 # ---------------------------------------------------------------------------
 
 def test_validate_valid_name():
-    assert _validate_player_name("  Justin Jefferson  ") == "Justin Jefferson"
+    assert validate_player_name("  Justin Jefferson  ") == "Justin Jefferson"
 
 
 def test_validate_apostrophe():
-    assert _validate_player_name("Ja'Marr Chase") == "Ja'Marr Chase"
+    assert validate_player_name("Ja'Marr Chase") == "Ja'Marr Chase"
 
 
 def test_validate_empty_raises():
     with pytest.raises(ValueError, match="empty"):
-        _validate_player_name("")
+        validate_player_name("")
 
 
 def test_validate_too_long_raises():
     with pytest.raises(ValueError, match="too long"):
-        _validate_player_name("A" * 51)
+        validate_player_name("A" * 51)
 
 
 def test_validate_invalid_chars_raises():
     with pytest.raises(ValueError, match="invalid characters"):
-        _validate_player_name("Player<script>")
+        validate_player_name("Player<script>")
 
 
 # ---------------------------------------------------------------------------
-# Unit: _parse_verdict
+# Unit: parse_verdict
 # ---------------------------------------------------------------------------
 
 def test_parse_verdict_draft():
-    text = "RISK: 3/10\nVERDICT: Draft\nREASON: Solid value at ADP."
-    result = _parse_verdict("Test Player", text)
-    assert result["risk_score"] == 3
-    assert result["verdict"] == "Draft"
-    assert result["reason"] == "Solid value at ADP."
+    result = parse_verdict("Test Player", "RISK: 3/10\nVERDICT: Draft\nREASON: Solid value at ADP.")
+    assert result.risk_score == 3
+    assert result.verdict == "Draft"
+    assert result.reason == "Solid value at ADP."
 
 
 def test_parse_verdict_pass():
-    text = "RISK: 8/10\nVERDICT: Pass\nREASON: Overpriced relative to projection."
-    result = _parse_verdict("Test Player", text)
-    assert result["risk_score"] == 8
-    assert result["verdict"] == "Pass"
+    result = parse_verdict("Test Player", "RISK: 8/10\nVERDICT: Pass\nREASON: Overpriced relative to projection.")
+    assert result.risk_score == 8
+    assert result.verdict == "Pass"
 
 
 def test_parse_verdict_strips_cite_tags():
-    text = 'RISK: 4/10\nVERDICT: Draft\nREASON: <cite index="1-2">Good value</cite> at his ADP.'
-    result = _parse_verdict("Test Player", text)
-    assert "<cite" not in result["reason"]
-    assert "Good value" in result["reason"]
+    result = parse_verdict("Test Player", 'RISK: 4/10\nVERDICT: Draft\nREASON: <cite index="1-2">Good value</cite> at his ADP.')
+    assert "<cite" not in result.reason
+    assert "Good value" in result.reason
 
 
 def test_parse_verdict_case_insensitive():
-    text = "risk: 5/10\nverdict: draft\nreason: Worth the pick."
-    result = _parse_verdict("Test Player", text)
-    assert result["risk_score"] == 5
-    assert result["verdict"] == "Draft"
+    result = parse_verdict("Test Player", "risk: 5/10\nverdict: draft\nreason: Worth the pick.")
+    assert result.risk_score == 5
+    assert result.verdict == "Draft"
 
 
 def test_parse_verdict_missing_fields():
-    result = _parse_verdict("Test Player", "No structured output here.")
-    assert result["risk_score"] is None
-    assert result["verdict"] is None
-    assert result["reason"] is None
+    result = parse_verdict("Test Player", "No structured output here.")
+    assert result.risk_score is None
+    assert result.verdict is None
+    assert result.reason is None
 
 
 # ---------------------------------------------------------------------------
@@ -89,12 +90,17 @@ def post_analyze(client, player_name):
 
 def test_analyze_requires_auth(client):
     res = post_analyze(client, "Justin Jefferson")
-    assert res.status_code == 401 or res.status_code == 302
+    assert res.status_code in (401, 302)
+
+
+MOCK_RAW = "RISK: 2/10\nVERDICT: Draft\nREASON: Top WR value at his ADP."
+ROUTES = "app.analysis.presentation.routes"
 
 
 def test_analyze_success(client, free_user):
     login(client, "free@test.com")
-    with patch("app.client", new=object()), patch("app._analyze_player", return_value=MOCK_RESULT):
+    with patch(f"{ROUTES}.client", new=object()), \
+         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
         res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
     data = res.get_json()
@@ -104,7 +110,7 @@ def test_analyze_success(client, free_user):
 
 def test_analyze_empty_name(client, free_user):
     login(client, "free@test.com")
-    with patch("app.client", new=object()):
+    with patch(f"{ROUTES}.client", new=object()):
         res = post_analyze(client, "")
     assert res.status_code == 400
     assert b"empty" in res.data
@@ -112,14 +118,14 @@ def test_analyze_empty_name(client, free_user):
 
 def test_analyze_invalid_name(client, free_user):
     login(client, "free@test.com")
-    with patch("app.client", new=object()):
+    with patch(f"{ROUTES}.client", new=object()):
         res = post_analyze(client, "Player<>")
     assert res.status_code == 400
 
 
 def test_analyze_free_limit_reached(client, maxed_user):
     login(client, "maxed@test.com")
-    with patch("app.client", new=object()):
+    with patch(f"{ROUTES}.client", new=object()):
         res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 403
     assert res.get_json()["error"] == "free_limit_reached"
@@ -127,16 +133,18 @@ def test_analyze_free_limit_reached(client, maxed_user):
 
 def test_analyze_seasonal_bypasses_limit(client, seasonal_user):
     login(client, "seasonal@test.com")
-    with patch("app.client", new=object()), patch("app._analyze_player", return_value=MOCK_RESULT):
+    with patch(f"{ROUTES}.client", new=object()), \
+         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
         res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
 
 
 def test_analyze_increments_query_count(client, free_user, app):
     login(client, "free@test.com")
-    with patch("app.client", new=object()), patch("app._analyze_player", return_value=MOCK_RESULT):
+    with patch(f"{ROUTES}.client", new=object()), \
+         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
         post_analyze(client, "Justin Jefferson")
     with app.app_context():
-        from app import User
+        from app.identity.domain.models import User
         user = User.query.filter_by(email="free@test.com").first()
         assert user.queries_this_month == 1
