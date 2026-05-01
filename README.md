@@ -23,18 +23,31 @@ The agent uses Claude's server-side `web_search` tool, meaning Anthropic execute
 
 ## Stack
 
-- **Backend:** Python, Flask
-- **AI:** Anthropic Claude Opus 4.7 with adaptive thinking and live web search tool use
+- **Backend:** Python, Flask, SQLAlchemy, Flask-Login, Flask-Bcrypt
+- **AI:** Anthropic Claude Opus 4.7 with adaptive thinking and live web search
+- **Payments:** Stripe one-time checkout
+- **Database:** SQLite (local), PostgreSQL (production)
 - **Frontend:** Vanilla HTML/CSS/JS (no framework dependencies)
+- **Deployment:** Render
 
 ---
 
-## Setup
+## Features
+
+- **User auth** — email/password sign-up and login
+- **Free tier** — 10 queries per month
+- **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
+- **Stripe integration** — secure checkout and webhook-based access grants
+- **34 tests** covering auth, analysis, usage limits, and Stripe webhooks
+
+---
+
+## Local setup
 
 **1. Clone the repo**
 ```bash
-git clone <repo-url>
-cd Fantasy-Agent
+git clone https://github.com/joshmgrey/fantasy-draft-consultant.git
+cd fantasy-draft-consultant
 ```
 
 **2. Install dependencies**
@@ -42,11 +55,14 @@ cd Fantasy-Agent
 pip install -r requirements.txt
 ```
 
-**3. Set your Anthropic API key**
+**3. Set environment variables**
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
+export SECRET_KEY=your-random-secret-key
+export STRIPE_SECRET_KEY=sk_test_...
+export STRIPE_PRICE_ID=price_...
+export STRIPE_WEBHOOK_SECRET=whsec_...
 ```
-Get a key at [console.anthropic.com](https://console.anthropic.com).
 
 **4. Run the app**
 ```bash
@@ -57,52 +73,64 @@ Open [http://localhost:5000](http://localhost:5000).
 
 ---
 
-## CLI mode
+## Environment variables
 
-A standalone CLI version is also available if you prefer the terminal:
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key — [console.anthropic.com](https://console.anthropic.com) |
+| `SECRET_KEY` | Flask session secret — any long random string |
+| `DATABASE_URL` | PostgreSQL URL — auto-provided by Render (SQLite used locally) |
+| `STRIPE_SECRET_KEY` | Stripe secret key — Developers → API keys |
+| `STRIPE_PRICE_ID` | Stripe price ID for the $19.99 season pass |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret for `/webhook` endpoint |
+
+---
+
+## Running tests
 
 ```bash
-# Single player
-python draft_consultant.py "Ja'Marr Chase"
-
-# Interactive mode
-python draft_consultant.py
+pip install -r requirements-dev.txt
+PYTHONPATH=. pytest tests/ -v
 ```
+
+---
+
+## Deployment (Render)
+
+1. Push to GitHub
+2. Create a new **Web Service** on [render.com](https://render.com) and connect the repo
+3. Add a **PostgreSQL** database and copy the `DATABASE_URL`
+4. Set all environment variables in the Render dashboard
+5. Add a Stripe webhook pointing to `https://your-app.onrender.com/webhook` with the `checkout.session.completed` event
 
 ---
 
 ## Project structure
 
 ```
-Fantasy-Agent/
-├── app.py                  # Flask web app + Anthropic agent logic
+fantasy-draft-consultant/
+├── app.py                  # Flask app — routes, models, Anthropic agent
 ├── draft_consultant.py     # Standalone CLI version
-├── requirements.txt
-└── templates/
-    └── index.html          # Single-page web UI
+├── requirements.txt        # Production dependencies
+├── requirements-dev.txt    # Test dependencies
+├── Procfile                # Render/Heroku process config
+├── templates/
+│   ├── index.html          # Main app UI
+│   ├── login.html          # Login page
+│   └── signup.html         # Sign-up page
+└── tests/
+    ├── conftest.py         # Pytest fixtures
+    ├── test_auth.py        # Auth route tests
+    ├── test_analyze.py     # Analysis and usage limit tests
+    └── test_webhook.py     # Stripe webhook tests
 ```
 
 ---
 
 ## Security
 
-- Player name input is validated against a strict allowlist (letters, spaces, apostrophes, hyphens, periods only)
-- Player names are wrapped in XML delimiters in the prompt to prevent injection attacks
+- Player name input validated against a strict allowlist (letters, spaces, apostrophes, hyphens, periods only)
+- Player names wrapped in XML delimiters in the prompt to prevent injection
+- Passwords hashed with bcrypt
+- Stripe webhook signature verified on every request
 - API errors surface cleanly in the UI — no raw tracebacks exposed
-
----
-
-## Example output
-
-```
-─────────────────────────────────────────────
-  JA'MARR CHASE
-─────────────────────────────────────────────
-  ✅  DRAFT
-  RISK  [███░░░░░░░]  3/10
-  WHY   Chase's target share and YAC upside
-        make him a value at his current ADP
-        given his elite floor in a pass-heavy
-        offense.
-─────────────────────────────────────────────
-```
