@@ -8,7 +8,7 @@ import re
 import sys
 import anthropic
 import stripe
-from datetime import datetime
+from datetime import datetime, date
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -66,21 +66,35 @@ TOOLS = [
 # Models
 # ---------------------------------------------------------------------------
 
+def _season_expiry():
+    """Access runs through September 1 of the following year."""
+    today = date.today()
+    return date(today.year + 1, 9, 1)
+
+
+def _current_season():
+    today = date.today()
+    return today.year if today.month < 9 else today.year + 1
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     plan = db.Column(db.String(20), default="free", nullable=False)
+    plan_expires = db.Column(db.Date, nullable=True)
     queries_this_month = db.Column(db.Integer, default=0, nullable=False)
     query_month = db.Column(db.String(7), default="")
     stripe_customer_id = db.Column(db.String(100), nullable=True)
-    stripe_subscription_id = db.Column(db.String(100), nullable=True)
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
+
+    def has_season_access(self):
+        return self.plan == "seasonal" and self.plan_expires and date.today() < self.plan_expires
 
     def _sync_month(self):
         current_month = datetime.utcnow().strftime("%Y-%m")
@@ -90,13 +104,13 @@ class User(UserMixin, db.Model):
             db.session.commit()
 
     def can_query(self):
-        if self.plan == "pro":
+        if self.has_season_access():
             return True
         self._sync_month()
         return self.queries_this_month < FREE_QUERY_LIMIT
 
     def queries_remaining(self):
-        if self.plan == "pro":
+        if self.has_season_access():
             return None
         self._sync_month()
         return max(0, FREE_QUERY_LIMIT - self.queries_this_month)
@@ -175,23 +189,11 @@ def subscribe():
         customer_email=current_user.email,
         payment_method_types=["card"],
         line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
-        mode="subscription",
-        success_url=request.host_url.rstrip("/") + "/?subscribed=1",
+        mode="payment",
+        success_url=request.host_url.rstrip("/") + "/?purchased=1",
         cancel_url=request.host_url.rstrip("/") + "/",
     )
     return redirect(session.url)
-
-
-@app.route("/billing")
-@login_required
-def billing():
-    if not current_user.stripe_customer_id:
-        return redirect(url_for("index"))
-    portal = stripe.billing_portal.Session.create(
-        customer=current_user.stripe_customer_id,
-        return_url=request.host_url.rstrip("/") + "/",
-    )
-    return redirect(portal.url)
 
 
 @app.route("/webhook", methods=["POST"])
@@ -207,17 +209,9 @@ def webhook():
         session = event["data"]["object"]
         user = User.query.filter_by(email=session.get("customer_email")).first()
         if user:
-            user.plan = "pro"
+            user.plan = "seasonal"
+            user.plan_expires = _season_expiry()
             user.stripe_customer_id = session.get("customer")
-            user.stripe_subscription_id = session.get("subscription")
-            db.session.commit()
-
-    elif event["type"] == "customer.subscription.deleted":
-        sub = event["data"]["object"]
-        user = User.query.filter_by(stripe_subscription_id=sub["id"]).first()
-        if user:
-            user.plan = "free"
-            user.stripe_subscription_id = None
             db.session.commit()
 
     return "", 200
@@ -316,7 +310,8 @@ def _parse_verdict(player_name: str, text: str) -> dict:
 def index():
     return render_template(
         "index.html",
-        plan=current_user.plan,
+        has_access=current_user.has_season_access(),
+        season=_current_season(),
         queries_remaining=current_user.queries_remaining(),
         free_limit=FREE_QUERY_LIMIT,
         email=current_user.email,

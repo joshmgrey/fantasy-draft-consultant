@@ -19,14 +19,13 @@ def test_webhook_invalid_signature(client):
     assert res.status_code == 400
 
 
-def test_webhook_checkout_completed_upgrades_user(client, free_user, app):
+def test_webhook_checkout_completed_grants_season_access(client, free_user, app):
     event = {
         "type": "checkout.session.completed",
         "data": {
             "object": {
                 "customer_email": "free@test.com",
                 "customer": "cus_abc123",
-                "subscription": "sub_abc123",
             }
         },
     }
@@ -35,23 +34,9 @@ def test_webhook_checkout_completed_upgrades_user(client, free_user, app):
     assert res.status_code == 200
     with app.app_context():
         user = User.query.filter_by(email="free@test.com").first()
-        assert user.plan == "pro"
+        assert user.plan == "seasonal"
+        assert user.plan_expires is not None
         assert user.stripe_customer_id == "cus_abc123"
-        assert user.stripe_subscription_id == "sub_abc123"
-
-
-def test_webhook_subscription_deleted_downgrades_user(client, pro_user, app):
-    event = {
-        "type": "customer.subscription.deleted",
-        "data": {"object": {"id": "sub_test"}},
-    }
-    with patch("stripe.Webhook.construct_event", return_value=event):
-        res = post_webhook(client, event)
-    assert res.status_code == 200
-    with app.app_context():
-        user = User.query.filter_by(email="pro@test.com").first()
-        assert user.plan == "free"
-        assert user.stripe_subscription_id is None
 
 
 def test_webhook_unknown_event_ignored(client):

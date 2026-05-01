@@ -359,24 +359,23 @@
   <nav>
     <span class="nav-email">{{ email }}</span>
     <div class="nav-right">
-      {% if plan == "pro" %}
-        <span class="badge-pro">PRO</span>
-        <a href="/billing" class="btn-manage">Manage billing</a>
+      {% if has_access %}
+        <span class="badge-pro">{{ season }} Season</span>
       {% else %}
-        <span class="badge-free">Free plan</span>
-        <a href="/subscribe" class="btn-upgrade">Upgrade to Pro</a>
+        <span class="badge-free">Free</span>
+        <a href="/subscribe" class="btn-upgrade">Get {{ season }} Season — $19.99</a>
       {% endif %}
       <a href="/logout" class="btn-logout">Sign out</a>
     </div>
   </nav>
 
-  {% if plan != "pro" %}
+  {% if not has_access %}
   <div class="usage-bar">
     {% set used = free_limit - queries_remaining %}
     {% set pct = (used / free_limit * 100) | int %}
     <div class="usage-label">
       <span>{{ used }} of {{ free_limit }} free queries used this month</span>
-      <a href="/subscribe">Upgrade for unlimited</a>
+      <a href="/subscribe">Get unlimited for $19.99</a>
     </div>
     <div class="usage-track">
       <div class="usage-fill {% if pct >= 100 %}full{% elif pct >= 70 %}warn{% endif %}"
@@ -411,8 +410,8 @@
 
   <div class="upgrade-box" id="upgradeBox">
     <p><strong>You've used all {{ free_limit }} free queries this month.</strong><br>
-    Upgrade to Pro for unlimited player analysis all season long.</p>
-    <a href="/subscribe">Upgrade to Pro — $9.99/mo</a>
+    Get the {{ season }} Season pass for unlimited player analysis through draft day.</p>
+    <a href="/subscribe">Get {{ season }} Season Access — $19.99</a>
   </div>
 
   <div class="card" id="resultCard">

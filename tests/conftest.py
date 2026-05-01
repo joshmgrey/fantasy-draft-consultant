@@ -30,8 +30,9 @@ def free_user(app):
 
 
 @pytest.fixture
-def pro_user(app):
-    user = User(email="pro@test.com", plan="pro", stripe_customer_id="cus_test", stripe_subscription_id="sub_test")
+def seasonal_user(app):
+    from app import _season_expiry
+    user = User(email="seasonal@test.com", plan="seasonal", plan_expires=_season_expiry(), stripe_customer_id="cus_test")
     user.set_password("password123")
     db.session.add(user)
     db.session.commit()

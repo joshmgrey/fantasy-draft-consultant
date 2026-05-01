@@ -125,8 +125,8 @@ def test_analyze_free_limit_reached(client, maxed_user):
     assert res.get_json()["error"] == "free_limit_reached"
 
 
-def test_analyze_pro_bypasses_limit(client, pro_user):
-    login(client, "pro@test.com")
+def test_analyze_seasonal_bypasses_limit(client, seasonal_user):
+    login(client, "seasonal@test.com")
     with patch("app.client", new=object()), patch("app._analyze_player", return_value=MOCK_RESULT):
         res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
