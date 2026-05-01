@@ -33,9 +33,6 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = ""
 
-with app.app_context():
-    db.create_all()
-
 FREE_QUERY_LIMIT = 10
 
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
@@ -348,6 +345,10 @@ def analyze():
 
     current_user.increment_query()
     return jsonify(result)
+
+
+with app.app_context():
+    db.create_all()
 
 
 if __name__ == "__main__":
