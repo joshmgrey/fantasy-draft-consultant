@@ -15,8 +15,112 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 48px 16px;
+      padding: 0 16px 48px;
     }
+
+    /* Nav */
+    nav {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      margin-bottom: 32px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .nav-email { font-size: 0.8rem; color: #8b949e; }
+
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+
+    .badge-pro {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #3fb950;
+      background: #0d2818;
+      border: 1px solid #238636;
+      border-radius: 99px;
+      padding: 3px 10px;
+    }
+
+    .badge-free {
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    .btn-upgrade {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #fff;
+      background: #238636;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .btn-upgrade:hover { background: #2ea043; }
+
+    .btn-manage {
+      font-size: 0.8rem;
+      color: #8b949e;
+      background: none;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s;
+    }
+
+    .btn-manage:hover { border-color: #8b949e; color: #e6edf3; }
+
+    .btn-logout {
+      font-size: 0.8rem;
+      color: #484f58;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .btn-logout:hover { color: #8b949e; }
+
+    /* Usage bar (free only) */
+    .usage-bar {
+      width: 100%;
+      max-width: 520px;
+      margin-bottom: 28px;
+    }
+
+    .usage-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+
+    .usage-label a { color: #3fb950; text-decoration: none; }
+    .usage-label a:hover { text-decoration: underline; }
+
+    .usage-track {
+      height: 4px;
+      background: #21262d;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .usage-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: #3fb950;
+      transition: width 0.3s ease;
+    }
+
+    .usage-fill.warn { background: #d29922; }
+    .usage-fill.full { background: #f85149; }
 
     header {
       text-align: center;
@@ -212,6 +316,36 @@
 
     .error-box.visible { display: block; }
 
+    /* Upgrade prompt */
+    .upgrade-box {
+      display: none;
+      width: 100%;
+      max-width: 520px;
+      padding: 20px 24px;
+      background: #161b22;
+      border: 1px solid #238636;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .upgrade-box.visible { display: block; }
+    .upgrade-box p { color: #8b949e; font-size: 0.9rem; margin-bottom: 14px; }
+    .upgrade-box strong { color: #e6edf3; }
+
+    .upgrade-box a {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #238636;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .upgrade-box a:hover { background: #2ea043; }
+
     footer {
       margin-top: auto;
       padding-top: 48px;
@@ -221,6 +355,36 @@
   </style>
 </head>
 <body>
+
+  <nav>
+    <span class="nav-email">{{ email }}</span>
+    <div class="nav-right">
+      {% if plan == "pro" %}
+        <span class="badge-pro">PRO</span>
+        <a href="/billing" class="btn-manage">Manage billing</a>
+      {% else %}
+        <span class="badge-free">Free plan</span>
+        <a href="/subscribe" class="btn-upgrade">Upgrade to Pro</a>
+      {% endif %}
+      <a href="/logout" class="btn-logout">Sign out</a>
+    </div>
+  </nav>
+
+  {% if plan != "pro" %}
+  <div class="usage-bar">
+    {% set used = free_limit - queries_remaining %}
+    {% set pct = (used / free_limit * 100) | int %}
+    <div class="usage-label">
+      <span>{{ used }} of {{ free_limit }} free queries used this month</span>
+      <a href="/subscribe">Upgrade for unlimited</a>
+    </div>
+    <div class="usage-track">
+      <div class="usage-fill {% if pct >= 100 %}full{% elif pct >= 70 %}warn{% endif %}"
+           style="width: {{ pct }}%"></div>
+    </div>
+  </div>
+  {% endif %}
+
   <header>
     <h1>🏈 2026 PPR <span>Draft Consultant</span></h1>
     <p>Powered by Claude Opus 4.7 + Live Web Search</p>
@@ -244,6 +408,12 @@
   </div>
 
   <div class="error-box" id="errorBox"></div>
+
+  <div class="upgrade-box" id="upgradeBox">
+    <p><strong>You've used all {{ free_limit }} free queries this month.</strong><br>
+    Upgrade to Pro for unlimited player analysis all season long.</p>
+    <a href="/subscribe">Upgrade to Pro — $9.99/mo</a>
+  </div>
 
   <div class="card" id="resultCard">
     <div class="card-header">
@@ -285,6 +455,7 @@
       setLoading(true);
       hide('resultCard');
       hide('errorBox');
+      hide('upgradeBox');
 
       try {
         const res = await fetch('/analyze', {
@@ -294,6 +465,11 @@
         });
 
         const data = await res.json();
+
+        if (res.status === 403 && data.error === 'free_limit_reached') {
+          show('upgradeBox');
+          return;
+        }
 
         if (!res.ok || data.error) {
           showError(data.error || 'Something went wrong.');

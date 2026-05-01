@@ -7,6 +7,8 @@ import os
 import re
 import sys
 import anthropic
+import stripe
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -14,6 +16,10 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 
 _api_key = os.environ.get("ANTHROPIC_API_KEY")
 client = anthropic.Anthropic(api_key=_api_key) if _api_key else None
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
@@ -25,6 +31,8 @@ bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = ""
+
+FREE_QUERY_LIMIT = 10
 
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
 _MAX_NAME_LEN = 50
@@ -62,12 +70,41 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    plan = db.Column(db.String(20), default="free", nullable=False)
+    queries_this_month = db.Column(db.Integer, default=0, nullable=False)
+    query_month = db.Column(db.String(7), default="")
+    stripe_customer_id = db.Column(db.String(100), nullable=True)
+    stripe_subscription_id = db.Column(db.String(100), nullable=True)
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
+
+    def _sync_month(self):
+        current_month = datetime.utcnow().strftime("%Y-%m")
+        if self.query_month != current_month:
+            self.queries_this_month = 0
+            self.query_month = current_month
+            db.session.commit()
+
+    def can_query(self):
+        if self.plan == "pro":
+            return True
+        self._sync_month()
+        return self.queries_this_month < FREE_QUERY_LIMIT
+
+    def queries_remaining(self):
+        if self.plan == "pro":
+            return None
+        self._sync_month()
+        return max(0, FREE_QUERY_LIMIT - self.queries_this_month)
+
+    def increment_query(self):
+        self._sync_month()
+        self.queries_this_month += 1
+        db.session.commit()
 
 
 @login_manager.user_loader
@@ -125,6 +162,65 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
+
+# ---------------------------------------------------------------------------
+# Stripe routes
+# ---------------------------------------------------------------------------
+
+@app.route("/subscribe")
+@login_required
+def subscribe():
+    session = stripe.checkout.Session.create(
+        customer_email=current_user.email,
+        payment_method_types=["card"],
+        line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+        mode="subscription",
+        success_url=request.host_url.rstrip("/") + "/?subscribed=1",
+        cancel_url=request.host_url.rstrip("/") + "/",
+    )
+    return redirect(session.url)
+
+
+@app.route("/billing")
+@login_required
+def billing():
+    if not current_user.stripe_customer_id:
+        return redirect(url_for("index"))
+    portal = stripe.billing_portal.Session.create(
+        customer=current_user.stripe_customer_id,
+        return_url=request.host_url.rstrip("/") + "/",
+    )
+    return redirect(portal.url)
+
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return "", 400
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        user = User.query.filter_by(email=session.get("customer_email")).first()
+        if user:
+            user.plan = "pro"
+            user.stripe_customer_id = session.get("customer")
+            user.stripe_subscription_id = session.get("subscription")
+            db.session.commit()
+
+    elif event["type"] == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+        user = User.query.filter_by(stripe_subscription_id=sub["id"]).first()
+        if user:
+            user.plan = "free"
+            user.stripe_subscription_id = None
+            db.session.commit()
+
+    return "", 200
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +314,13 @@ def _parse_verdict(player_name: str, text: str) -> dict:
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        plan=current_user.plan,
+        queries_remaining=current_user.queries_remaining(),
+        free_limit=FREE_QUERY_LIMIT,
+        email=current_user.email,
+    )
 
 
 @app.route("/analyze", methods=["POST"])
@@ -226,6 +328,9 @@ def index():
 def analyze():
     if not client:
         return jsonify({"error": "ANTHROPIC_API_KEY environment variable is not set."}), 500
+
+    if not current_user.can_query():
+        return jsonify({"error": "free_limit_reached"}), 403
 
     data = request.get_json(silent=True) or {}
     raw_name = data.get("player_name", "")
@@ -242,6 +347,7 @@ def analyze():
     except anthropic.APIConnectionError:
         return jsonify({"error": "Could not reach Anthropic API. Check your connection."}), 502
 
+    current_user.increment_query()
     return jsonify(result)
 
 
