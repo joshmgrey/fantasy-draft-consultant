@@ -191,6 +191,25 @@ def test_injection_via_inserted_context_is_fenced(restore_client, attack, payloa
         assert marker not in lowered, f"injection leaked into output: {marker!r}\n{output}"
 
 
+def test_withheld_leak_response_does_not_parse_as_a_pass(restore_client):
+    """A response caught by the leak guard must not reach clients as a real verdict."""
+    from app.analysis.domain.services import parse_verdict
+
+    class _LeakingClient:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kwargs):
+            return _Response([_Block("text", text=kwargs["system"])])  # echoes the prompt
+
+    ac.client = _LeakingClient()
+    output = analyze_player("Bijan Robinson")
+
+    assert "trust boundary" not in output.lower()
+    verdict = parse_verdict("Bijan Robinson", output)
+    assert verdict.verdict is None and verdict.risk_score is None
+
+
 # --------------------------------------------------------------------------- #
 # Tripwire: prove the oracle actually detects a missing defense
 # --------------------------------------------------------------------------- #
