@@ -1,6 +1,6 @@
 import os
-from flask import Flask
-from .extensions import db, bcrypt, login_manager
+from flask import Flask, jsonify
+from .extensions import db, bcrypt, login_manager, limiter
 
 
 def create_app(config=None):
@@ -22,6 +22,19 @@ def create_app(config=None):
     login_manager.init_app(app)
     login_manager.login_view = "identity.login"
     login_manager.login_message = ""
+
+    limiter.init_app(app)
+    # Rate limiting only gets in the way of the test suite, which fires many
+    # requests at the same endpoint from one client.
+    if app.config.get("TESTING"):
+        limiter.enabled = False
+
+    @app.errorhandler(429)
+    def ratelimit_handler(e):
+        return (
+            jsonify(error="Too many requests. Please wait a moment and try again."),
+            429,
+        )
 
     from .identity.infrastructure.repository import get_by_id
 
