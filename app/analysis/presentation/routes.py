@@ -28,7 +28,7 @@ def index():
 
 @bp.route("/analyze", methods=["POST"])
 @login_required
-@limiter.limit("10 per minute")
+@limiter.limit("10 per minute", exempt_when=lambda: not current_user.is_authenticated)
 def analyze():
     if not client:
         return jsonify({"error": "ANTHROPIC_API_KEY environment variable is not set."}), 500
