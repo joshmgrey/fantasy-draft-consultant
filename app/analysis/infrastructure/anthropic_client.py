@@ -2,9 +2,33 @@ import os
 from typing import Optional
 
 import anthropic
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 _api_key = os.environ.get("ANTHROPIC_API_KEY")
 client = anthropic.Anthropic(api_key=_api_key) if _api_key else None
+
+
+@retry(
+    retry=retry_if_exception_type(anthropic.RateLimitError),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
+def _create_message(**kwargs):
+    """Call ``client.messages.create`` with retry on Anthropic 429s.
+
+    Retries up to 3 attempts total with exponential backoff, and only on
+    :class:`anthropic.RateLimitError`. ``reraise=True`` means that once the
+    attempts are exhausted the original ``RateLimitError`` propagates (rather
+    than tenacity's ``RetryError``), so the caller's existing
+    ``anthropic``-exception handling still applies.
+    """
+    return client.messages.create(**kwargs)
 
 # --------------------------------------------------------------------------- #
 # Trust boundary
@@ -153,7 +177,7 @@ def analyze_player(player_name: str, retrieved_context: Optional[str] = None) ->
     while iterations < 10:
         iterations += 1
 
-        response = client.messages.create(
+        response = _create_message(
             model="claude-opus-4-7",
             max_tokens=1024,
             thinking={"type": "adaptive"},

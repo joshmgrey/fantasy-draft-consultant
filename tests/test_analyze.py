@@ -1,5 +1,7 @@
 import json
 import pytest
+import anthropic
+import httpx2
 from unittest.mock import patch
 from tests.conftest import login
 from app.analysis.domain.services import validate_player_name, parse_verdict
@@ -137,6 +139,22 @@ def test_analyze_seasonal_bypasses_limit(client, seasonal_user):
          patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
         res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
+
+
+def test_analyze_rate_limit_exhausted_returns_clean_error(client, free_user):
+    """If anthropic_client's retries are exhausted, the endpoint returns a clean
+    message via the existing error-handling pattern — not a raw 500/traceback."""
+    login(client, "free@test.com")
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx2.Response(429, request=request)
+    rate_limited = anthropic.RateLimitError("rate limited", response=response, body=None)
+    with patch(f"{ROUTES}.client", new=object()), \
+         patch(f"{ROUTES}.analyze_player", side_effect=rate_limited):
+        res = post_analyze(client, "Justin Jefferson")
+    assert res.status_code == 503
+    body = res.get_json()
+    assert "busy" in body["error"].lower()
+    assert "traceback" not in body["error"].lower()
 
 
 def test_analyze_increments_query_count(client, free_user, app):
