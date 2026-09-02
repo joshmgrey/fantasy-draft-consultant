@@ -53,7 +53,8 @@ Each context is self-contained with `domain/`, `infrastructure/`, and `presentat
 - **Free tier** — 10 queries per month
 - **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
 - **Stripe integration** — secure checkout and webhook-based access grants
-- **33 tests** covering auth, analysis, usage limits, and Stripe webhooks
+- **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
+- **58 tests** covering auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, and rate limiting
 
 ---
 
@@ -160,6 +161,9 @@ fantasy-draft-consultant/
 │   ├── conftest.py             # Pytest fixtures
 │   ├── test_auth.py            # Auth route tests
 │   ├── test_analyze.py         # Analysis and usage limit tests
+│   ├── test_prompt_injection.py # Prompt-injection regression tests
+│   ├── test_rate_limit.py      # Per-user /analyze rate-limit tests
+│   ├── test_retry.py           # Anthropic 429 retry/backoff tests
 │   └── test_webhook.py         # Stripe webhook tests
 ├── draft_consultant.py         # Standalone CLI version
 ├── requirements.txt            # Production dependencies
