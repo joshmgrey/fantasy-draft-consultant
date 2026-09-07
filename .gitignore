@@ -10,3 +10,6 @@ venv/
 .coverage
 .pytest_cache/
 *.db
+
+# Local Kubernetes secret material — copy secrets.example.env to secrets.env and fill it in.
+deploy/k8s/overlays/local/secrets.env

@@ -1,0 +1,18 @@
+# Base manifests for the two-service stack (core + analysis, a Postgres each).
+# Environment-agnostic: no image tags, no secret values, no replica counts that
+# only make sense locally. The `local` overlay (deploy/k8s/overlays/local) layers
+# those on for a kind cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Every object lands in this namespace.
+namespace: fantasy-local
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: fantasy-draft-consultant
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  # Workloads, Services, ConfigMap and Ingress are added in the commits that follow.
