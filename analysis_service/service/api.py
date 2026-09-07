@@ -3,6 +3,7 @@ import time
 
 import anthropic
 from flask import Blueprint, current_app, g, request
+from sqlalchemy import text
 
 from analysis_core import anthropic_client
 from analysis_core.contract import (
@@ -29,13 +30,29 @@ MODEL = "claude-opus-4-7"
 
 _HISTORY_MAX = 100
 
+# Readiness path. Not part of the core<->analysis wire contract (core never
+# calls it) — it's here for orchestrator probes only, alongside HEALTH_PATH.
+READY_PATH = "/readyz"
+
 
 @bp.get(HEALTH_PATH)
 def healthz():
+    """Liveness: the worker is up. No I/O — restart the pod if this fails."""
     return {
         "status": "ok",
         "anthropic_configured": anthropic_client.client is not None,
     }
+
+
+@bp.get(READY_PATH)
+def readyz():
+    """Readiness: this service's own database answers. Stop routing traffic
+    here if it fails, but don't restart — the DB, not the service, is down."""
+    try:
+        db.session.execute(text("SELECT 1"))
+    except Exception:
+        return {"status": "unavailable", "checks": {"database": "down"}}, 503
+    return {"status": "ok", "checks": {"database": "ok"}}
 
 
 @bp.post(ANALYZE_PATH)
