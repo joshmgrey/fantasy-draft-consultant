@@ -44,8 +44,7 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       ANALYSIS_TOKEN_SECRET: ${ANALYSIS_TOKEN_SECRET:?set ANALYSIS_TOKEN_SECRET in .env}
-      # Its own database. Unused until the persistence step; provisioned now so
-      # the compose stack matches the deployed topology.
+      # The service's own database — no tables or models shared with core-db.
       ANALYSIS_DATABASE_URL: postgresql://analysis:analysis@analysis-db:5432/analysis
     depends_on:
       analysis-db:

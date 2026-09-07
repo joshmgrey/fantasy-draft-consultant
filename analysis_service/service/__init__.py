@@ -6,6 +6,7 @@ from werkzeug.exceptions import HTTPException
 from analysis_core.contract import ErrorCode
 
 from .api import bp
+from .persistence import db
 from .schemas import error_response
 
 
@@ -16,9 +17,21 @@ def create_app(config=None):
     app.config["TOKEN_LEEWAY_SECONDS"] = int(
         os.environ.get("ANALYSIS_TOKEN_LEEWAY_SECONDS", "5")
     )
+    # The service's own database. Unset -> ephemeral in-memory (fine for tests
+    # and a "you didn't configure it" local run); compose/prod set
+    # ANALYSIS_DATABASE_URL to a dedicated Postgres.
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+        "ANALYSIS_DATABASE_URL", "sqlite:///:memory:"
+    ).replace("postgres://", "postgresql://")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["PERSIST_ANALYSES"] = True
 
     if config:
         app.config.update(config)
+
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
 
     app.register_blueprint(bp)
 
