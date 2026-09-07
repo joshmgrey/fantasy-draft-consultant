@@ -11,7 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
+from analysis_core.contract import DEFAULT_TOKEN_TTL_SECONDS
 from analysis_core.models import PlayerVerdict
+
+# Shown to the end user whenever the analysis path is temporarily unusable
+# (upstream rate limit, or the analysis service itself is down). Kept here so
+# both client implementations and the route agree on the wording.
+BUSY_MESSAGE = "The analysis service is busy right now. Please try again in a minute."
 
 
 @dataclass(frozen=True)
@@ -53,11 +59,19 @@ class AnalysisRateLimited(AnalysisError):
 
 
 class AnalysisUnavailable(AnalysisError):
-    """The analysis backend errored or could not be reached. -> HTTP 502."""
+    """The analysis backend (Anthropic) errored. -> HTTP 502."""
+
+
+class AnalysisServiceDown(AnalysisError):
+    """The analysis service itself is unreachable or failing (transport error,
+    5xx, or it reported it cannot serve). Retryable. -> HTTP 503.
+
+    Only the HTTP client raises this; in-process mode has no such failure."""
 
 
 class AnalysisNotConfigured(AnalysisError):
-    """The analysis backend is not configured (e.g. no API key). -> HTTP 500."""
+    """The analysis backend is not configured (e.g. no API key, or the shared
+    token secret / service URL is missing). -> HTTP 500."""
 
 
 @runtime_checkable
@@ -82,7 +96,16 @@ def build_analysis_client(config) -> AnalysisClient:
         from .inprocess import InProcessAnalysisClient
 
         return InProcessAnalysisClient()
-    # "http" is wired up in a later step.
+    if mode == "http":
+        from .http import HttpAnalysisClient
+
+        return HttpAnalysisClient(
+            base_url=config.get("ANALYSIS_SERVICE_URL", ""),
+            token_secret=config.get("ANALYSIS_TOKEN_SECRET", ""),
+            connect_timeout=float(config.get("ANALYSIS_CONNECT_TIMEOUT", 3.0)),
+            read_timeout=float(config.get("ANALYSIS_READ_TIMEOUT", 90.0)),
+            token_ttl=int(config.get("ANALYSIS_TOKEN_TTL", DEFAULT_TOKEN_TTL_SECONDS)),
+        )
     raise RuntimeError(
-        f"Unknown ANALYSIS_MODE {mode!r} (expected 'inprocess')"
+        f"Unknown ANALYSIS_MODE {mode!r} (expected 'inprocess' or 'http')"
     )

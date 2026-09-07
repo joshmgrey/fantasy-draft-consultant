@@ -13,16 +13,12 @@ from analysis_core.models import PlayerVerdict
 from analysis_core.services import parse_verdict, validate_player_name
 
 from .base import (
+    BUSY_MESSAGE,
     Actor,
     AnalysisBadRequest,
     AnalysisNotConfigured,
     AnalysisRateLimited,
     AnalysisUnavailable,
-)
-
-# Matches the message the route returned for an exhausted retry before the split.
-_BUSY_MESSAGE = (
-    "The analysis service is busy right now. Please try again in a minute."
 )
 
 
@@ -42,7 +38,7 @@ class InProcessAnalysisClient:
             raw_text = _core.analyze_player(name)
         except anthropic.RateLimitError as e:
             # RateLimitError is a subclass of APIStatusError — catch it first.
-            raise AnalysisRateLimited(_BUSY_MESSAGE) from e
+            raise AnalysisRateLimited(BUSY_MESSAGE) from e
         except anthropic.APIStatusError as e:
             raise AnalysisUnavailable(
                 f"API error ({e.status_code}): {e.message}"

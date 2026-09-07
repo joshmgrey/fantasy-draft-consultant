@@ -97,6 +97,17 @@ def test_factory_defaults_to_inprocess():
     assert isinstance(build_analysis_client({}), InProcessAnalysisClient)
 
 
+def test_factory_builds_http_client():
+    from app.analysis.client.http import HttpAnalysisClient
+
+    client = build_analysis_client({
+        "ANALYSIS_MODE": "http",
+        "ANALYSIS_SERVICE_URL": "http://analysis.internal",
+        "ANALYSIS_TOKEN_SECRET": "s",
+    })
+    assert isinstance(client, HttpAnalysisClient)
+
+
 def test_factory_rejects_unknown_mode():
     with pytest.raises(RuntimeError):
         build_analysis_client({"ANALYSIS_MODE": "carrier-pigeon"})

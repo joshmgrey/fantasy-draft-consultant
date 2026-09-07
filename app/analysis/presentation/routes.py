@@ -8,6 +8,7 @@ from app.analysis.client.base import (
     AnalysisBadRequest,
     AnalysisNotConfigured,
     AnalysisRateLimited,
+    AnalysisServiceDown,
     AnalysisUnavailable,
 )
 from app.subscription.domain.services import (
@@ -56,7 +57,7 @@ def analyze():
         return jsonify({"error": str(e)}), 400
     except AnalysisNotConfigured as e:
         return jsonify({"error": str(e)}), 500
-    except AnalysisRateLimited as e:
+    except (AnalysisRateLimited, AnalysisServiceDown) as e:
         return jsonify({"error": str(e)}), 503
     except AnalysisUnavailable as e:
         return jsonify({"error": str(e)}), 502
