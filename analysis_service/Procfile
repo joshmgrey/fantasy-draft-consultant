@@ -1,0 +1,1 @@
+web: gunicorn analysis_service.wsgi:app --bind 0.0.0.0:$PORT

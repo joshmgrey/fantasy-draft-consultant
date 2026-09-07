@@ -1,0 +1,7 @@
+# The analysis service. Run from the repo root so `analysis_core` is importable.
+flask>=3.0.0
+flask-sqlalchemy>=3.0.0
+psycopg2-binary>=2.9.0
+anthropic>=0.40.0
+tenacity>=8.2.0
+gunicorn>=21.0.0

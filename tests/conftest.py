@@ -3,6 +3,36 @@ from app import create_app
 from app.extensions import db
 from app.identity.domain.models import User
 from app.subscription.domain.services import FREE_QUERY_LIMIT, season_expiry
+from analysis_core.models import PlayerVerdict
+
+
+class FakeAnalysisClient:
+    """Test double for ``app.analysis.client.base.AnalysisClient``.
+
+    Assign it to ``app.extensions["analysis_client"]`` to control what the
+    ``/analyze`` route sees without touching ``analysis_core`` or the network::
+
+        app.extensions["analysis_client"] = FakeAnalysisClient(
+            error=AnalysisRateLimited("busy"))
+    """
+
+    def __init__(self, *, verdict=None, error=None):
+        self._verdict = verdict
+        self._error = error
+        self.calls = []
+
+    def analyze(self, *, player_name, actor):
+        self.calls.append((player_name, actor))
+        if self._error is not None:
+            raise self._error
+        if self._verdict is not None:
+            return self._verdict
+        return PlayerVerdict(
+            player=player_name,
+            risk_score=2,
+            verdict="Draft",
+            reason="Top WR value at his ADP.",
+        )
 
 
 @pytest.fixture

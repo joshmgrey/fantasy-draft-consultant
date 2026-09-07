@@ -1,18 +1,9 @@
 import json
 import pytest
-import anthropic
-import httpx2
-from unittest.mock import patch
-from tests.conftest import login
-from app.analysis.domain.services import validate_player_name, parse_verdict
-from app.analysis.infrastructure import anthropic_client as ac_module
-
-MOCK_VERDICT_DICT = {"player": "Justin Jefferson", "risk_score": 2, "verdict": "Draft", "reason": "Top WR value at his ADP."}
-
-
-def _mock_verdict():
-    from app.analysis.domain.models import PlayerVerdict
-    return PlayerVerdict(player="Justin Jefferson", risk_score=2, verdict="Draft", reason="Top WR value at his ADP.")
+from tests.conftest import login, FakeAnalysisClient
+from analysis_core.models import PlayerVerdict
+from analysis_core.services import validate_player_name, parse_verdict
+from app.analysis.client.base import AnalysisRateLimited, AnalysisUnavailable
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +51,7 @@ def test_parse_verdict_pass():
 
 
 def test_parse_verdict_strips_cite_tags():
-    result = parse_verdict("Test Player", 'RISK: 4/10\nVERDICT: Draft\nREASON: <cite index="1-2">Good value</cite> at his ADP.')
+    result = parse_verdict("Test Player", 'RISK: 4/10\nVERDICT: Draft\nREASON: (cite index="1-2">Good value</cite> at his ADP.')
     assert "<cite" not in result.reason
     assert "Good value" in result.reason
 
@@ -80,7 +71,19 @@ def test_parse_verdict_missing_fields():
 
 # ---------------------------------------------------------------------------
 # Integration: /analyze endpoint
+#
+# The route reaches the analysis context through
+# ``app.extensions["analysis_client"]``. Tests swap in a FakeAnalysisClient to
+# drive the endpoint without touching analysis_core or the network. Exception
+# -> response mapping for the in-process client is covered in
+# test_analysis_client.py.
 # ---------------------------------------------------------------------------
+
+MOCK_VERDICT = PlayerVerdict(
+    player="Justin Jefferson", risk_score=2, verdict="Draft",
+    reason="Top WR value at his ADP.",
+)
+
 
 def post_analyze(client, player_name):
     return client.post(
@@ -90,78 +93,97 @@ def post_analyze(client, player_name):
     )
 
 
+def use_fake(app, **kwargs):
+    fake = FakeAnalysisClient(**kwargs)
+    app.extensions["analysis_client"] = fake
+    return fake
+
+
 def test_analyze_requires_auth(client):
     res = post_analyze(client, "Justin Jefferson")
     assert res.status_code in (401, 302)
 
 
-MOCK_RAW = "RISK: 2/10\nVERDICT: Draft\nREASON: Top WR value at his ADP."
-ROUTES = "app.analysis.presentation.routes"
-
-
-def test_analyze_success(client, free_user):
+def test_analyze_success(client, free_user, app):
     login(client, "free@test.com")
-    with patch(f"{ROUTES}.client", new=object()), \
-         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
-        res = post_analyze(client, "Justin Jefferson")
+    use_fake(app, verdict=MOCK_VERDICT)
+    res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
     data = res.get_json()
     assert data["verdict"] == "Draft"
     assert data["risk_score"] == 2
 
 
-def test_analyze_empty_name(client, free_user):
+def test_analyze_passes_player_and_actor_to_client(client, free_user, app):
     login(client, "free@test.com")
-    with patch(f"{ROUTES}.client", new=object()):
-        res = post_analyze(client, "")
+    fake = use_fake(app, verdict=MOCK_VERDICT)
+    post_analyze(client, "Justin Jefferson")
+    assert len(fake.calls) == 1
+    player_name, actor = fake.calls[0]
+    assert player_name == "Justin Jefferson"
+    with app.app_context():
+        from app.identity.domain.models import User
+        expected_id = str(User.query.filter_by(email="free@test.com").first().id)
+    assert actor.user_id == expected_id
+
+
+def test_analyze_empty_name(client, free_user, app):
+    login(client, "free@test.com")
+    use_fake(app)
+    res = post_analyze(client, "")
     assert res.status_code == 400
     assert b"empty" in res.data
 
 
-def test_analyze_invalid_name(client, free_user):
+def test_analyze_invalid_name(client, free_user, app):
     login(client, "free@test.com")
-    with patch(f"{ROUTES}.client", new=object()):
-        res = post_analyze(client, "Player<>")
+    use_fake(app)
+    res = post_analyze(client, "Player<>")
     assert res.status_code == 400
 
 
-def test_analyze_free_limit_reached(client, maxed_user):
+def test_analyze_free_limit_reached(client, maxed_user, app):
     login(client, "maxed@test.com")
-    with patch(f"{ROUTES}.client", new=object()):
-        res = post_analyze(client, "Justin Jefferson")
+    use_fake(app)
+    res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 403
     assert res.get_json()["error"] == "free_limit_reached"
 
 
-def test_analyze_seasonal_bypasses_limit(client, seasonal_user):
+def test_analyze_seasonal_bypasses_limit(client, seasonal_user, app):
     login(client, "seasonal@test.com")
-    with patch(f"{ROUTES}.client", new=object()), \
-         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
-        res = post_analyze(client, "Justin Jefferson")
+    use_fake(app, verdict=MOCK_VERDICT)
+    res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 200
 
 
-def test_analyze_rate_limit_exhausted_returns_clean_error(client, free_user):
-    """If anthropic_client's retries are exhausted, the endpoint returns a clean
-    message via the existing error-handling pattern — not a raw 500/traceback."""
+def test_analyze_rate_limited_returns_clean_error(client, free_user, app):
+    """A rate-limited backend surfaces as a clean 503 message, not a traceback."""
     login(client, "free@test.com")
-    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
-    response = httpx2.Response(429, request=request)
-    rate_limited = anthropic.RateLimitError("rate limited", response=response, body=None)
-    with patch(f"{ROUTES}.client", new=object()), \
-         patch(f"{ROUTES}.analyze_player", side_effect=rate_limited):
-        res = post_analyze(client, "Justin Jefferson")
+    use_fake(app, error=AnalysisRateLimited(
+        "The analysis service is busy right now. Please try again in a minute."))
+    res = post_analyze(client, "Justin Jefferson")
     assert res.status_code == 503
     body = res.get_json()
     assert "busy" in body["error"].lower()
     assert "traceback" not in body["error"].lower()
 
 
+def test_analyze_does_not_increment_query_on_failure(client, free_user, app):
+    login(client, "free@test.com")
+    use_fake(app, error=AnalysisUnavailable("API error (502): bad gateway"))
+    res = post_analyze(client, "Justin Jefferson")
+    assert res.status_code == 502
+    with app.app_context():
+        from app.identity.domain.models import User
+        user = User.query.filter_by(email="free@test.com").first()
+        assert user.queries_this_month == 0
+
+
 def test_analyze_increments_query_count(client, free_user, app):
     login(client, "free@test.com")
-    with patch(f"{ROUTES}.client", new=object()), \
-         patch(f"{ROUTES}.analyze_player", return_value=MOCK_RAW):
-        post_analyze(client, "Justin Jefferson")
+    use_fake(app, verdict=MOCK_VERDICT)
+    post_analyze(client, "Justin Jefferson")
     with app.app_context():
         from app.identity.domain.models import User
         user = User.query.filter_by(email="free@test.com").first()

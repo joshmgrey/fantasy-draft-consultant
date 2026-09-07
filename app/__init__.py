@@ -13,6 +13,13 @@ def create_app(config=None):
     _db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db").replace("postgres://", "postgresql://")
     app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # How the core app reaches the analysis context: "inprocess" (default) runs
+    # it in this process; "http" calls the standalone analysis service.
+    app.config["ANALYSIS_MODE"] = os.environ.get("ANALYSIS_MODE", "inprocess")
+    app.config["ANALYSIS_SERVICE_URL"] = os.environ.get("ANALYSIS_SERVICE_URL", "")
+    app.config["ANALYSIS_TOKEN_SECRET"] = os.environ.get("ANALYSIS_TOKEN_SECRET", "")
+    app.config["ANALYSIS_CONNECT_TIMEOUT"] = os.environ.get("ANALYSIS_CONNECT_TIMEOUT", "3")
+    app.config["ANALYSIS_READ_TIMEOUT"] = os.environ.get("ANALYSIS_READ_TIMEOUT", "90")
 
     if config:
         app.config.update(config)
@@ -41,6 +48,10 @@ def create_app(config=None):
     @login_manager.user_loader
     def load_user(user_id):
         return get_by_id(user_id)
+
+    from .analysis.client.base import build_analysis_client
+
+    app.extensions["analysis_client"] = build_analysis_client(app.config)
 
     from .identity.presentation.routes import bp as identity_bp
     from .analysis.presentation.routes import bp as analysis_bp
