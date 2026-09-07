@@ -3,8 +3,8 @@ from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 
 from app.extensions import limiter
-from app.analysis.domain.services import validate_player_name, parse_verdict
-from app.analysis.infrastructure.anthropic_client import analyze_player, client
+from analysis_core.services import validate_player_name, parse_verdict
+from analysis_core.anthropic_client import analyze_player, client
 from app.subscription.domain.services import (
     can_query, increment_query, queries_remaining, has_season_access,
     current_season, FREE_QUERY_LIMIT,

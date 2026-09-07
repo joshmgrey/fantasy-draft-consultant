@@ -1,6 +1,6 @@
 """Retry-with-backoff tests for the Anthropic API call.
 
-``app.analysis.infrastructure.anthropic_client._create_message`` wraps
+``analysis_core.anthropic_client._create_message`` wraps
 ``client.messages.create`` in a tenacity retry that fires on
 ``anthropic.RateLimitError`` with exponential backoff, capped at 3 attempts.
 These tests stand in a fake Anthropic client so no network calls happen, and
@@ -11,7 +11,7 @@ import anthropic
 import httpx2
 import pytest
 
-from app.analysis.infrastructure import anthropic_client as ac
+from analysis_core import anthropic_client as ac
 
 
 CLEAN_VERDICT = "RISK: 3/10\nVERDICT: Draft\nREASON: Priced a round light relative to his ADP."

@@ -1,7 +1,7 @@
 """Prompt-injection regression tests for the player-analysis pipeline.
 
 These tests drive the REAL prompt-construction path in
-``app.analysis.infrastructure.anthropic_client`` — the hardened system prompt,
+``analysis_core.anthropic_client`` — the hardened system prompt,
 the structured user message, the ``fence_untrusted`` delimiters, and the agentic
 loop — while standing in a fake Anthropic client so no network calls or API
 spend occur.
@@ -10,15 +10,15 @@ The fake client is an *oracle*: it plays a language model that will comply with
 an injection payload UNLESS the specific defense that should stop that payload is
 actually present in the request our code built. A failure here therefore means a
 defense clause is missing or a trust boundary was not enforced in
-``anthropic_client.py`` — not that a live model misbehaved. ``run_pipeline`` is
+``analysis_core.anthropic_client`` — not that a live model misbehaved. ``run_pipeline`` is
 the seam the tests call; it swaps in the oracle and returns
 ``analyze_player``'s real text output as a string.
 """
 
 import pytest
 
-from app.analysis.infrastructure import anthropic_client as ac
-from app.analysis.infrastructure.anthropic_client import (
+from analysis_core import anthropic_client as ac
+from analysis_core.anthropic_client import (
     UNTRUSTED_CLOSE,
     UNTRUSTED_OPEN,
     analyze_player,
@@ -193,7 +193,7 @@ def test_injection_via_inserted_context_is_fenced(restore_client, attack, payloa
 
 def test_withheld_leak_response_does_not_parse_as_a_pass(restore_client):
     """A response caught by the leak guard must not reach clients as a real verdict."""
-    from app.analysis.domain.services import parse_verdict
+    from analysis_core.services import parse_verdict
 
     class _LeakingClient:
         def __init__(self):

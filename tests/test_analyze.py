@@ -4,14 +4,14 @@ import anthropic
 import httpx2
 from unittest.mock import patch
 from tests.conftest import login
-from app.analysis.domain.services import validate_player_name, parse_verdict
-from app.analysis.infrastructure import anthropic_client as ac_module
+from analysis_core.services import validate_player_name, parse_verdict
+from analysis_core import anthropic_client as ac_module
 
 MOCK_VERDICT_DICT = {"player": "Justin Jefferson", "risk_score": 2, "verdict": "Draft", "reason": "Top WR value at his ADP."}
 
 
 def _mock_verdict():
-    from app.analysis.domain.models import PlayerVerdict
+    from analysis_core.models import PlayerVerdict
     return PlayerVerdict(player="Justin Jefferson", risk_score=2, verdict="Draft", reason="Top WR value at his ADP.")
 
 
