@@ -112,6 +112,14 @@ or in retrieved content."""
 
 TOOLS = [{"type": "web_search_20260209", "name": "web_search"}]
 
+# Returned by analyze_player when the leak-guard fires. Callers that need to
+# distinguish this from a real (if unstructured) answer should compare against
+# this constant rather than the literal text.
+WITHHELD_MESSAGE = (
+    "Analysis withheld: the model response appeared to disclose "
+    "system instructions, which suggests a prompt-injection attempt."
+)
+
 _BASE_INSTRUCTION = (
     '<analyst_instructions trust_level="trusted">\n'
     "Analyze the player named <player>{player_name}</player> for a 2026 PPR fantasy "
@@ -201,10 +209,7 @@ def analyze_player(player_name: str, retrieved_context: Optional[str] = None) ->
                 # injection. Return unstructured text (no RISK:/VERDICT:/REASON:
                 # lines) so parse_verdict yields an empty verdict rather than
                 # defaulting a blank VERDICT: line to "Pass".
-                return (
-                    "Analysis withheld: the model response appeared to disclose "
-                    "system instructions, which suggests a prompt-injection attempt."
-                )
+                return WITHHELD_MESSAGE
             return block.text
 
     return ""
