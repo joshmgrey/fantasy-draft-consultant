@@ -1,0 +1,86 @@
+# Full local stack: core + analysis + a Postgres for each.
+#
+#   cp .env.example .env      # fill in ANTHROPIC_API_KEY + ANALYSIS_TOKEN_SECRET
+#   docker compose up --build
+#   open http://localhost:5000
+#
+# The core app talks to the analysis service over HTTP (ANALYSIS_MODE=http).
+# To run the monolith instead, don't use compose: `python run.py` defaults to
+# ANALYSIS_MODE=inprocess.
+
+services:
+  core-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: core
+      POSTGRES_PASSWORD: core
+      POSTGRES_DB: core
+    volumes:
+      - core-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  analysis-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: analysis
+      POSTGRES_PASSWORD: analysis
+      POSTGRES_DB: analysis
+    volumes:
+      - analysis-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analysis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  analysis:
+    build:
+      context: .
+      dockerfile: analysis_service/Dockerfile
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      ANALYSIS_TOKEN_SECRET: ${ANALYSIS_TOKEN_SECRET:?set ANALYSIS_TOKEN_SECRET in .env}
+      # Its own database. Unused until the persistence step; provisioned now so
+      # the compose stack matches the deployed topology.
+      ANALYSIS_DATABASE_URL: postgresql://analysis:analysis@analysis-db:5432/analysis
+    depends_on:
+      analysis-db:
+        condition: service_healthy
+    # Not published to the host — only `core` needs to reach it.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-prod}
+      DATABASE_URL: postgresql://core:core@core-db:5432/core
+      ANALYSIS_MODE: http
+      ANALYSIS_SERVICE_URL: http://analysis:8000
+      ANALYSIS_TOKEN_SECRET: ${ANALYSIS_TOKEN_SECRET:?set ANALYSIS_TOKEN_SECRET in .env}
+      ANALYSIS_READ_TIMEOUT: "100"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    ports:
+      - "5000:8000"
+    depends_on:
+      core-db:
+        condition: service_healthy
+      analysis:
+        condition: service_healthy
+
+volumes:
+  core-db-data:
+  analysis-db-data:
