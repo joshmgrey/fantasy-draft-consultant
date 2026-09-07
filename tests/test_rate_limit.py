@@ -7,15 +7,11 @@ integration test re-enables it explicitly and resets it afterwards.
 import json
 
 import pytest
-from unittest.mock import patch
 
 from app.extensions import limiter, user_or_ip_key
 from app.identity.domain.models import User
 from app.extensions import db
-from tests.conftest import login
-
-ROUTES = "app.analysis.presentation.routes"
-MOCK_RAW = "RISK: 2/10\nVERDICT: Draft\nREASON: Top WR value at his ADP."
+from tests.conftest import login, FakeAnalysisClient
 
 
 def post_analyze(client, name="Justin Jefferson"):
@@ -60,14 +56,12 @@ def test_per_user_buckets_are_isolated(app, limiter_enabled):
         db.session.add(u)
     db.session.commit()
 
-    patches = patch.multiple(
-        ROUTES, client=object(), analyze_player=lambda name: MOCK_RAW,
-    )
+    app.extensions["analysis_client"] = FakeAnalysisClient()
 
     # Each user gets its own app context so Flask-Login's per-context user
     # cache (g._login_user) doesn't bleed between the two test clients — the
     # conftest fixture keeps one app context open for the whole test.
-    with patches, app.app_context():
+    with app.app_context():
         client_a = app.test_client()
         login(client_a, "a@test.com")
         codes_a = [post_analyze(client_a).status_code for _ in range(11)]
@@ -76,7 +70,7 @@ def test_per_user_buckets_are_isolated(app, limiter_enabled):
     assert codes_a[:10] == [200] * 10
     assert codes_a[10] == 429
 
-    with patches, app.app_context():
+    with app.app_context():
         client_b = app.test_client()
         login(client_b, "b@test.com")
         # user B starts fresh — not affected by user A hitting the limit
