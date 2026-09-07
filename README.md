@@ -75,7 +75,7 @@ both modes.
 - **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **157 tests** (106 core + 51 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, and the analysis-service-down failure mode
+- **161 tests** (106 core + 55 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, and the analysis-service-down failure mode
 
 ---
 

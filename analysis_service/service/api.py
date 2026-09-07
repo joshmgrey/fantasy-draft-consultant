@@ -116,9 +116,12 @@ def list_analyses():
 
     user_id = request.args.get("user_id") or g.actor.sub
     try:
-        limit = min(int(request.args.get("limit", 20)), _HISTORY_MAX)
+        limit = int(request.args.get("limit", 20))
     except (TypeError, ValueError):
         return error_response(ErrorCode.MALFORMED_REQUEST, "limit must be an integer")
+    # Clamp to [1, _HISTORY_MAX]: a negative limit becomes SQL "LIMIT -1", which
+    # returns every row on SQLite and errors on Postgres.
+    limit = max(1, min(limit, _HISTORY_MAX))
 
     rows = (
         AnalysisRecord.query.filter_by(requested_by=user_id)

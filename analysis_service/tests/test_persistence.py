@@ -129,5 +129,21 @@ def test_history_respects_limit(client, auth_headers, configured, monkeypatch):
     assert len(items) == 2
 
 
+@pytest.mark.parametrize("limit", ["-1", "0", "-999"])
+def test_history_clamps_non_positive_limit(client, auth_headers, configured, monkeypatch, limit):
+    """A negative limit must not become SQL 'LIMIT -1' (all rows / Postgres 500)."""
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    for _ in range(3):
+        post(client, auth_headers, player_name="Bijan Robinson")
+    res = client.get(f"{ANALYZE_PATH}?limit={limit}", headers=auth_headers)
+    assert res.status_code == 200
+    assert len(res.get_json()["items"]) == 1
+
+
+def test_history_rejects_non_integer_limit(client, auth_headers, configured):
+    res = client.get(f"{ANALYZE_PATH}?limit=abc", headers=auth_headers)
+    assert res.status_code == 422
+
+
 def test_history_requires_auth(client):
     assert client.get(ANALYZE_PATH).status_code == 401
