@@ -20,6 +20,22 @@ spec:
         app.kubernetes.io/name: core
         app.kubernetes.io/component: web
     spec:
+      initContainers:
+        # The app runs db.create_all() at startup; block until core-db accepts
+        # connections so the pod starts cleanly instead of CrashLoopBackOff.
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - 'until pg_isready -h core-db -p 5432 -U core; do echo "waiting for core-db"; sleep 2; done'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: core
           # Tag is pinned by the `local` overlay's images: transformer.

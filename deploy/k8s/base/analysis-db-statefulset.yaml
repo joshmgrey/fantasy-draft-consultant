@@ -1,0 +1,72 @@
+# Analysis service's own PostgreSQL — separate instance, separate volume, no
+# tables or models shared with core-db. Single replica, local only. Same
+# StatefulSet rationale as core-db.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: analysis-db
+  labels:
+    app.kubernetes.io/name: analysis-db
+    app.kubernetes.io/component: database
+spec:
+  serviceName: analysis-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: analysis-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: analysis-db
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: analysis
+            - name: POSTGRES_DB
+              value: analysis
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANALYSIS_DB_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "analysis", "-d", "analysis", "-h", "127.0.0.1"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "analysis", "-d", "analysis", "-h", "127.0.0.1"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

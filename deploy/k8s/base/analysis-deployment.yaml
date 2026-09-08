@@ -21,6 +21,22 @@ spec:
         app.kubernetes.io/name: analysis
         app.kubernetes.io/component: analysis
     spec:
+      initContainers:
+        # The service runs db.create_all() at startup; block until analysis-db
+        # accepts connections so the pod starts cleanly.
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - 'until pg_isready -h analysis-db -p 5432 -U analysis; do echo "waiting for analysis-db"; sleep 2; done'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
       containers:
         - name: analysis
           # Tag is pinned by the `local` overlay's images: transformer.

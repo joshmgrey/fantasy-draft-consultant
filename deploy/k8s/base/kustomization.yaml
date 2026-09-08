@@ -19,4 +19,8 @@ resources:
   - core-service.yaml
   - analysis-deployment.yaml
   - analysis-service.yaml
-  # The two databases, ConfigMap and Ingress are added in the commits that follow.
+  - core-db-statefulset.yaml
+  - core-db-service.yaml
+  - analysis-db-statefulset.yaml
+  - analysis-db-service.yaml
+  # ConfigMap and Ingress are added in the commits that follow.
