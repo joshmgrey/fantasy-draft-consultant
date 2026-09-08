@@ -1,0 +1,97 @@
+# The core service: identity + subscription + the analysis client (ANALYSIS_MODE
+# selects in-process vs. the analysis service). Stateless — its data lives in
+# core-db. Environment config (DATABASE_URL, ANALYSIS_*, SECRET_KEY) is wired in
+# a later commit from the ConfigMap and Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: web
+    spec:
+      initContainers:
+        # The app runs db.create_all() at startup; block until core-db accepts
+        # connections so the pod starts cleanly instead of CrashLoopBackOff.
+        - name: wait-for-db
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - 'until pg_isready -h core-db -p 5432 -U core; do echo "waiting for core-db"; sleep 2; done'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: core
+          # Tag is pinned by the `local` overlay's images: transformer.
+          image: fantasy-core
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SECRET_KEY
+            - name: ANALYSIS_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANALYSIS_TOKEN_SECRET
+            - name: CORE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CORE_DB_PASSWORD
+            # DSN assembled here: only the password comes from the Secret; user,
+            # host and db name are fixed (see core-db StatefulSet). $(VAR) is
+            # expanded from earlier entries in this env list.
+            - name: DATABASE_URL
+              value: postgresql://core:$(CORE_DB_PASSWORD)@core-db:5432/core
+          # Liveness: the gunicorn worker is up. No I/O — a failure here means
+          # the process is wedged, so restart the pod.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness: /readyz runs "SELECT 1" against core-db. A failure pulls
+          # this pod out of core-service (stops traffic) without restarting it —
+          # the database, not the app, is the thing that's down.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

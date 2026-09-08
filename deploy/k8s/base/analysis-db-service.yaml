@@ -1,0 +1,17 @@
+# Headless Service governing the analysis-db StatefulSet. The analysis service
+# connects to host "analysis-db" on 5432 (ANALYSIS_DATABASE_URL). Not exposed
+# outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: analysis-db
+  labels:
+    app.kubernetes.io/name: analysis-db
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: analysis-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

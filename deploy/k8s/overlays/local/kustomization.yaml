@@ -1,0 +1,32 @@
+# Local kind overlay: the base stack + image tags + the app-secrets Secret.
+# This is what `make k8s-up` applies.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Also set here (not just in base) so the generated Secret lands in the namespace.
+namespace: fantasy-local
+
+resources:
+  - ../../base
+
+# Tag both images :local. kind load docker-image puts these into the node, and
+# a pinned (non-latest) tag makes IfNotPresent the default pull policy, so the
+# kubelet never reaches for a registry.
+images:
+  - name: fantasy-core
+    newTag: local
+  - name: fantasy-analysis
+    newTag: local
+
+# The Secret both Deployments and both StatefulSets reference as "app-secrets".
+# Built from secrets.env (gitignored) — copy secrets.example.env to create it.
+secretGenerator:
+  - name: app-secrets
+    envs:
+      - secrets.env
+
+# Keep the Secret named exactly "app-secrets" (no content-hash suffix) so the
+# base's secretKeyRef names resolve. `make k8s-up` restarts the workloads after
+# apply, so we don't rely on a name change to trigger a rollout.
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,77 @@
+# Core service's PostgreSQL. Single replica, local only — not a production HA
+# setup. A StatefulSet (rather than Deployment + PVC) because its
+# volumeClaimTemplate keeps the PVC bound to the DB's identity and survives a
+# `kubectl delete -k` of the workloads, so data outlives a k8s-down/up cycle,
+# and it sidesteps the Deployment+RWO footgun where a rolling update briefly
+# schedules a second pod that cannot mount the volume.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: core-db
+  labels:
+    app.kubernetes.io/name: core-db
+    app.kubernetes.io/component: database
+spec:
+  serviceName: core-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core-db
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: core
+            - name: POSTGRES_DB
+              value: core
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CORE_DB_PASSWORD
+            # Keep PGDATA in a subdirectory of the mount so initdb is not
+            # confused by a non-empty volume root.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "core", "-d", "core", "-h", "127.0.0.1"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "core", "-d", "core", "-h", "127.0.0.1"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

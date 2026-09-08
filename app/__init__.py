@@ -53,10 +53,12 @@ def create_app(config=None):
 
     app.extensions["analysis_client"] = build_analysis_client(app.config)
 
+    from .health import bp as health_bp
     from .identity.presentation.routes import bp as identity_bp
     from .analysis.presentation.routes import bp as analysis_bp
     from .subscription.presentation.routes import bp as subscription_bp
 
+    app.register_blueprint(health_bp)
     app.register_blueprint(identity_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(subscription_bp)

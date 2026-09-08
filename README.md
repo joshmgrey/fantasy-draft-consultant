@@ -64,7 +64,7 @@ both modes.
 - **Payments:** Stripe one-time checkout
 - **Database:** SQLite (local), PostgreSQL (production); the analysis service has its own
 - **Frontend:** Vanilla HTML/CSS/JS (no framework dependencies)
-- **Deployment:** Render; `docker-compose.yml` for the full local split stack
+- **Deployment:** Render; `docker-compose.yml` for the full local split stack; `deploy/k8s/` for local Kubernetes (kind)
 
 ---
 
@@ -75,7 +75,7 @@ both modes.
 - **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **161 tests** (106 core + 55 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, and the analysis-service-down failure mode
+- **167 tests** (109 core + 58 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, and the analysis-service-down failure mode
 
 ---
 
@@ -120,6 +120,22 @@ Runs the core app in `http` mode against the standalone analysis service, each
 with its own Postgres. Open [http://localhost:5000](http://localhost:5000). The
 analysis service is not published to the host — only the core app reaches it.
 
+### Local Kubernetes (kind)
+
+The same split stack on a local [kind](https://kind.sigs.k8s.io/) cluster —
+raw manifests + kustomize (base + a `local` overlay), reachable through an
+ingress-nginx Ingress. Independent of the compose and Render setups.
+
+```bash
+make cluster-up          # one-time: create the kind cluster + ingress-nginx
+cp deploy/k8s/overlays/local/secrets.example.env deploy/k8s/overlays/local/secrets.env
+make k8s-up              # build both images, load into kind, apply, wait
+```
+
+Open [http://fantasy.localtest.me/](http://fantasy.localtest.me/). See
+[`deploy/k8s/README.md`](deploy/k8s/README.md) for probes, the
+analysis-service-down demo, and teardown.
+
 ---
 
 ## Environment variables
@@ -144,9 +160,9 @@ analysis service is not published to the host — only the core app reaches it.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 157 (core + analysis service)
-pytest tests/                   # just the core app (106)
-pytest analysis_service/tests/  # just the analysis service (51)
+pytest                          # all 167 (core + analysis service)
+pytest tests/                   # just the core app (109)
+pytest analysis_service/tests/  # just the analysis service (58)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
@@ -184,6 +200,8 @@ fantasy-draft-consultant/
 ├── run.py                          # Core entry point (create_app)
 ├── docker-compose.yml              # core + analysis + a Postgres each
 ├── Dockerfile                      # core image
+├── Makefile                        # local kind workflow (k8s-up / k8s-down / ...)
+├── deploy/k8s/                     # raw manifests + kustomize base + local overlay
 ├── .env.example
 │
 ├── analysis_core/                  # Analysis domain logic — imported by both services
@@ -195,6 +213,7 @@ fantasy-draft-consultant/
 ├── app/                            # Core service
 │   ├── __init__.py                 # app factory; selects the analysis client
 │   ├── extensions.py               # db, bcrypt, login_manager, limiter
+│   ├── health.py                   # /healthz (liveness) + /readyz (DB-backed)
 │   ├── identity/                   #   domain/ infrastructure/ presentation/  (/login, /signup)
 │   ├── subscription/               #   domain/ infrastructure/ presentation/  (/subscribe, /webhook)
 │   └── analysis/
@@ -208,7 +227,7 @@ fantasy-draft-consultant/
 │   ├── wsgi.py  Dockerfile  Procfile  requirements.txt
 │   ├── service/
 │   │   ├── __init__.py             # app factory
-│   │   ├── api.py                  # POST/GET /v1/analyses, GET /healthz
+│   │   ├── api.py                  # POST/GET /v1/analyses, GET /healthz, GET /readyz
 │   │   ├── auth.py                 # verify the HMAC actor token (no identity import)
 │   │   ├── schemas.py              # Flask <-> analysis_core.contract glue
 │   │   └── persistence.py          # its own db + AnalysisRecord audit log

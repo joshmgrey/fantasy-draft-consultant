@@ -1,0 +1,62 @@
+# Validates that the Kubernetes manifests under deploy/k8s/ render with kustomize
+# and are schema-valid. Does not spin up a cluster.
+name: k8s manifests
+
+on:
+  push:
+    paths:
+      - 'deploy/k8s/**'
+      - '.github/workflows/k8s-manifests.yml'
+  pull_request:
+    paths:
+      - 'deploy/k8s/**'
+      - '.github/workflows/k8s-manifests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  kustomize-build:
+    runs-on: ubuntu-latest
+    env:
+      KUSTOMIZE_VERSION: '5.4.3'
+      KUBECONFORM_VERSION: '0.6.7'
+      # kubeconform validates against this Kubernetes API version's schemas.
+      KUBE_VERSION: '1.31.0'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kustomize
+        # Direct release download — no api.github.com call, so no anonymous
+        # rate-limiting (the install_kustomize.sh script hits the API and
+        # flakes when two runs start close together).
+        run: |
+          curl -sSfL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz kustomize
+          sudo mv kustomize /usr/local/bin/
+          kustomize version
+
+      - name: Install kubeconform
+        run: |
+          curl -sSfL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+          kubeconform -v
+
+      # The local overlay's secretGenerator reads this gitignored file.
+      # Real values are irrelevant to a build/schema check.
+      - name: Seed a placeholder secrets.env
+        run: cp deploy/k8s/overlays/local/secrets.example.env deploy/k8s/overlays/local/secrets.env
+
+      - name: Build base
+        run: kustomize build deploy/k8s/base | tee base.rendered.yaml
+
+      - name: Build local overlay
+        run: kustomize build deploy/k8s/overlays/local | tee local.rendered.yaml
+
+      - name: Validate against Kubernetes schemas
+        run: |
+          kubeconform -strict -summary \
+            -kubernetes-version "${KUBE_VERSION}" \
+            -schema-location default \
+            base.rendered.yaml local.rendered.yaml

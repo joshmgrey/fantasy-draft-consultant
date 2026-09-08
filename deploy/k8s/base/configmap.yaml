@@ -1,0 +1,21 @@
+# Non-secret configuration shared by both services. Values here are the same
+# wherever this stack runs (they are in-cluster DNS names and tuning knobs), so
+# this lives in base. Secrets — the HMAC shared secret, DB passwords, the
+# Anthropic key — are NOT here; they come from the app-secrets Secret that the
+# local overlay generates.
+#
+# DB connection strings are assembled in each Deployment's env by splicing the
+# password from the Secret into a "postgresql://user@host:5432/db" template, so
+# the password never appears in this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  # Core -> analysis: call the standalone service over HTTP.
+  ANALYSIS_MODE: "http"
+  ANALYSIS_SERVICE_URL: "http://analysis-service:8000"
+  # Core -> analysis HTTP timeouts (seconds). Read timeout covers a full
+  # agentic analysis run, so it is generous.
+  ANALYSIS_CONNECT_TIMEOUT: "3"
+  ANALYSIS_READ_TIMEOUT: "100"

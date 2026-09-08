@@ -1,0 +1,18 @@
+# Headless Service governing the core-db StatefulSet (the standard pattern:
+# spec.serviceName points here). The core app connects to host "core-db" on
+# 5432; with one replica this A record resolves to the single pod. Not exposed
+# outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-db
+  labels:
+    app.kubernetes.io/name: core-db
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: core-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

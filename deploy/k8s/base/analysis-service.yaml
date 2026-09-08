@@ -1,0 +1,18 @@
+# In-cluster address for the analysis service. The core app dials this by DNS
+# name as http://analysis-service:8000 (ANALYSIS_SERVICE_URL). ClusterIP only —
+# never reachable from outside the cluster, matching the compose/Render setup
+# where only the core app can talk to it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: analysis-service
+  labels:
+    app.kubernetes.io/name: analysis
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: analysis
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
