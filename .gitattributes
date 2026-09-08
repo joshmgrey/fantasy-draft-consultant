@@ -1,0 +1,6 @@
+# A Makefile with CRLF line endings breaks `make` (the trailing \r is appended
+# to each command). Force LF for it and for the Kubernetes manifests, which are
+# also consumed by tools that dislike CRLF.
+Makefile text eol=lf
+*.mk text eol=lf
+deploy/k8s/** text eol=lf
