@@ -1,0 +1,24 @@
+# One-time kind cluster definition for this project. `make cluster-up` uses it.
+#
+# The control-plane node is labelled ingress-ready=true and publishes ports 80
+# and 443 to the host, which is what kind's ingress-nginx manifest expects. That
+# makes http://fantasy.localtest.me/ (see deploy/k8s/base/ingress.yaml) reach
+# the cluster with no port-forward.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: fantasy
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
