@@ -1,0 +1,58 @@
+# The standalone analysis service (POST/GET /v1/analyses, /healthz, /readyz).
+# Verifies the core app's HMAC actor token; shares no database or models with
+# core. Stateless — its audit log lives in analysis-db. Environment config
+# (ANALYSIS_DATABASE_URL, ANALYSIS_TOKEN_SECRET, ANTHROPIC_API_KEY) is wired in
+# a later commit from the ConfigMap and Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analysis
+  labels:
+    app.kubernetes.io/name: analysis
+    app.kubernetes.io/component: analysis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: analysis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: analysis
+        app.kubernetes.io/component: analysis
+    spec:
+      containers:
+        - name: analysis
+          # Tag is pinned by the `local` overlay's images: transformer.
+          image: fantasy-analysis
+          ports:
+            - name: http
+              containerPort: 8000
+          # Liveness: the gunicorn worker is up. No I/O (does not check the DB
+          # or Anthropic) — a failure means the process is wedged, so restart.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness: /readyz runs "SELECT 1" against analysis-db. A failure
+          # pulls this pod out of analysis-service; the core app then sees no
+          # endpoint and returns its 503 "analysis service is busy" path.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
