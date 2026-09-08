@@ -27,9 +27,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install kustomize
+        # Direct release download — no api.github.com call, so no anonymous
+        # rate-limiting (the install_kustomize.sh script hits the API and
+        # flakes when two runs start close together).
         run: |
-          curl -sSfL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" \
-            | bash -s "${KUSTOMIZE_VERSION}"
+          curl -sSfL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz kustomize
           sudo mv kustomize /usr/local/bin/
           kustomize version
 
