@@ -44,6 +44,25 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+          env:
+            # Same shared secret the core app signs actor tokens with — must match.
+            - name: ANALYSIS_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANALYSIS_TOKEN_SECRET
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: ANALYSIS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANALYSIS_DB_PASSWORD
+            - name: ANALYSIS_DATABASE_URL
+              value: postgresql://analysis:$(ANALYSIS_DB_PASSWORD)@analysis-db:5432/analysis
           # Liveness: the gunicorn worker is up. No I/O (does not check the DB
           # or Anthropic) — a failure means the process is wedged, so restart.
           livenessProbe:

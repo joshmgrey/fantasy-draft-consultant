@@ -43,6 +43,30 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SECRET_KEY
+            - name: ANALYSIS_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ANALYSIS_TOKEN_SECRET
+            - name: CORE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CORE_DB_PASSWORD
+            # DSN assembled here: only the password comes from the Secret; user,
+            # host and db name are fixed (see core-db StatefulSet). $(VAR) is
+            # expanded from earlier entries in this env list.
+            - name: DATABASE_URL
+              value: postgresql://core:$(CORE_DB_PASSWORD)@core-db:5432/core
           # Liveness: the gunicorn worker is up. No I/O — a failure here means
           # the process is wedged, so restart the pod.
           livenessProbe:
