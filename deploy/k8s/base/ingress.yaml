@@ -1,0 +1,30 @@
+# The only way into the cluster. Routes browser traffic to core-service; the
+# analysis service has no Ingress and stays unreachable from outside.
+#
+# Host fantasy.localtest.me resolves to 127.0.0.1 via public DNS, so no hosts
+# file edit is needed. With kind's ingress-nginx (ports 80/443 mapped to the
+# host) this is reachable at http://fantasy.localtest.me/.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fantasy
+  labels:
+    app.kubernetes.io/name: core
+  annotations:
+    # A full agentic analysis can take up to ANALYSIS_READ_TIMEOUT (100s); give
+    # the nginx proxy more than its 60s default so /analyze isn't cut off.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: fantasy.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: core-service
+                port:
+                  name: http

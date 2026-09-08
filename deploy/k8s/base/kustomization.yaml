@@ -24,4 +24,4 @@ resources:
   - core-db-service.yaml
   - analysis-db-statefulset.yaml
   - analysis-db-service.yaml
-  # Ingress is added in the commit that follows.
+  - ingress.yaml
