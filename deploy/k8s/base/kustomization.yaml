@@ -11,7 +11,10 @@ namespace: fantasy-local
 labels:
   - pairs:
       app.kubernetes.io/part-of: fantasy-draft-consultant
+    # Keep it off immutable selectors, but DO stamp it on pod templates so
+    # `kubectl logs -l app.kubernetes.io/part-of=...` (make k8s-logs) matches.
     includeSelectors: false
+    includeTemplates: true
 
 resources:
   - namespace.yaml
