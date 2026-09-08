@@ -1,0 +1,17 @@
+# Stable in-cluster address for the core app. The Ingress routes browser
+# traffic here; nothing else needs to reach it. ClusterIP only — the Ingress
+# is the sole entry point from outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-service
+  labels:
+    app.kubernetes.io/name: core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: core
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

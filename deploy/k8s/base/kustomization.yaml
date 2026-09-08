@@ -15,4 +15,6 @@ labels:
 
 resources:
   - namespace.yaml
-  # Workloads, Services, ConfigMap and Ingress are added in the commits that follow.
+  - core-deployment.yaml
+  - core-service.yaml
+  # analysis, the two databases, ConfigMap and Ingress are added in the commits that follow.

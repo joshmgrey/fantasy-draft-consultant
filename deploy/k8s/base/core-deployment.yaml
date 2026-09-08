@@ -1,0 +1,57 @@
+# The core service: identity + subscription + the analysis client (ANALYSIS_MODE
+# selects in-process vs. the analysis service). Stateless — its data lives in
+# core-db. Environment config (DATABASE_URL, ANALYSIS_*, SECRET_KEY) is wired in
+# a later commit from the ConfigMap and Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: web
+    spec:
+      containers:
+        - name: core
+          # Tag is pinned by the `local` overlay's images: transformer.
+          image: fantasy-core
+          ports:
+            - name: http
+              containerPort: 8000
+          # Liveness: the gunicorn worker is up. No I/O — a failure here means
+          # the process is wedged, so restart the pod.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness: /readyz runs "SELECT 1" against core-db. A failure pulls
+          # this pod out of core-service (stops traffic) without restarting it —
+          # the database, not the app, is the thing that's down.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
