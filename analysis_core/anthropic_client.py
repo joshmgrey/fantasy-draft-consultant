@@ -202,14 +202,18 @@ def analyze_player(player_name: str, retrieved_context: Optional[str] = None) ->
             continue
         break
 
-    for block in response.content:
-        if hasattr(block, "type") and block.type == "text":
-            if _looks_like_prompt_leak(block.text):
-                # The model echoed its own instructions — likely a successful
-                # injection. Return unstructured text (no RISK:/VERDICT:/REASON:
-                # lines) so parse_verdict yields an empty verdict rather than
-                # defaulting a blank VERDICT: line to "Pass".
-                return WITHHELD_MESSAGE
-            return block.text
-
-    return ""
+    # With web search the answer arrives as many text blocks — one per cited
+    # span — and the RISK:/VERDICT:/REASON: lines are usually in the last one,
+    # so join them all rather than taking the first.
+    text = "".join(
+        block.text
+        for block in response.content
+        if getattr(block, "type", None) == "text" and block.text
+    )
+    if text and _looks_like_prompt_leak(text):
+        # The model echoed its own instructions — likely a successful
+        # injection. Return unstructured text (no RISK:/VERDICT:/REASON:
+        # lines) so parse_verdict yields an empty verdict rather than
+        # defaulting a blank VERDICT: line to "Pass".
+        return WITHHELD_MESSAGE
+    return text
