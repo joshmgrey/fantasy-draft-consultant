@@ -374,12 +374,12 @@
     {% set used = free_limit - queries_remaining %}
     {% set pct = (used / free_limit * 100) | int %}
     <div class="usage-label">
-      <span>{{ used }} of {{ free_limit }} free queries used this month</span>
+      <span id="usageText">{{ used }} of {{ free_limit }} free queries used this month</span>
       <a href="/subscribe">Get unlimited for $19.99</a>
     </div>
     <div class="usage-track">
-      <div class="usage-fill {% if pct >= 100 %}full{% elif pct >= 70 %}warn{% endif %}"
-           style="width: {{ pct }}%"></div>
+      <div class="usage-fill {% if pct >= 100 %}full{% elif pct >= 70 %}warn{% endif %}" id="usageFill"
+           data-limit="{{ free_limit }}" style="width: {{ pct }}%"></div>
     </div>
   </div>
   {% endif %}
@@ -482,6 +482,7 @@
         }
 
         showResult(data);
+        updateUsage(data.queries_remaining);
       } catch (err) {
         showError('Network error — could not reach the server.');
       } finally {
@@ -510,6 +511,19 @@
       document.getElementById('resultReason').textContent = d.reason ?? '—';
 
       show('resultCard');
+    }
+
+    // Mirrors the server-rendered usage bar; no bar (season pass) means nothing to do.
+    function updateUsage(remaining) {
+      const fill = document.getElementById('usageFill');
+      if (!fill || typeof remaining !== 'number') return;
+      const limit = Number(fill.dataset.limit);
+      const used  = limit - remaining;
+      const pct   = Math.floor(used / limit * 100);
+      document.getElementById('usageText').textContent =
+        `${used} of ${limit} free queries used this month`;
+      fill.style.width = pct + '%';
+      fill.className = 'usage-fill' + (pct >= 100 ? ' full' : pct >= 70 ? ' warn' : '');
     }
 
     function showError(msg) {

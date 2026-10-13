@@ -4,6 +4,7 @@ from tests.conftest import login, FakeAnalysisClient
 from analysis_core.models import PlayerVerdict
 from analysis_core.services import validate_player_name, parse_verdict
 from app.analysis.client.base import AnalysisRateLimited, AnalysisUnavailable
+from app.subscription.domain.services import FREE_QUERY_LIMIT
 
 
 # ---------------------------------------------------------------------------
@@ -208,3 +209,21 @@ def test_analyze_incomplete_verdict_is_an_error_and_not_charged(client, free_use
         from app.identity.domain.models import User
         user = User.query.filter_by(email="free@test.com").first()
         assert user.queries_this_month == 0
+
+
+def test_analyze_returns_queries_remaining_for_free_user(client, free_user, app):
+    """The page redraws its usage bar from this, so it must reflect the query just made."""
+    login(client, "free@test.com")
+    use_fake(app, verdict=MOCK_VERDICT)
+    first = post_analyze(client, "Justin Jefferson").get_json()
+    second = post_analyze(client, "Justin Jefferson").get_json()
+    assert first["queries_remaining"] == FREE_QUERY_LIMIT - 1
+    assert second["queries_remaining"] == FREE_QUERY_LIMIT - 2
+    assert second["verdict"] == "Draft"  # verdict fields stay at the top level
+
+
+def test_analyze_queries_remaining_is_null_for_season_pass(client, seasonal_user, app):
+    login(client, "seasonal@test.com")
+    use_fake(app, verdict=MOCK_VERDICT)
+    body = post_analyze(client, "Justin Jefferson").get_json()
+    assert "queries_remaining" in body and body["queries_remaining"] is None
