@@ -4,6 +4,7 @@ from flask import Flask
 from werkzeug.exceptions import HTTPException
 
 from analysis_core.contract import ErrorCode
+from analysis_core.db_url import sqlalchemy_url
 
 from .api import bp
 from .persistence import db
@@ -20,9 +21,9 @@ def create_app(config=None):
     # The service's own database. Unset -> ephemeral in-memory (fine for tests
     # and a "you didn't configure it" local run); compose/prod set
     # ANALYSIS_DATABASE_URL to a dedicated Postgres.
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "ANALYSIS_DATABASE_URL", "sqlite:///:memory:"
-    ).replace("postgres://", "postgresql://")
+    app.config["SQLALCHEMY_DATABASE_URI"] = sqlalchemy_url(
+        os.environ.get("ANALYSIS_DATABASE_URL", "sqlite:///:memory:")
+    )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["PERSIST_ANALYSES"] = True
 

@@ -10,8 +10,11 @@ def create_app(config=None):
     )
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
-    _db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db").replace("postgres://", "postgresql://")
-    app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
+    from analysis_core.db_url import sqlalchemy_url
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = sqlalchemy_url(
+        os.environ.get("DATABASE_URL", "sqlite:///app.db")
+    )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # How the core app reaches the analysis context: "inprocess" (default) runs
     # it in this process; "http" calls the standalone analysis service.
