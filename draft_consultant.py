@@ -120,12 +120,13 @@ def analyze_player(player_name: str) -> dict:
 
     print(" done.\n")
 
-    # Extract the final text response
-    final_text = ""
-    for block in response.content:
-        if hasattr(block, "type") and block.type == "text":
-            final_text = block.text
-            break
+    # With web search the answer arrives as one text block per cited span, and
+    # the RISK:/VERDICT:/REASON: lines are in the last one, so join them all.
+    final_text = "".join(
+        block.text
+        for block in response.content
+        if getattr(block, "type", None) == "text" and block.text
+    )
 
     return _parse_verdict(player_name, final_text)
 
