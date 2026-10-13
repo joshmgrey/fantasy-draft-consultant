@@ -7,7 +7,7 @@ Built with Claude Opus 4.7 and live web search — type a player name, get a ris
 ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 2/10, and a one-sentence reason" width="560">
+  <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
 </p>
 
 ---
