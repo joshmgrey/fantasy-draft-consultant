@@ -1,16 +1,10 @@
 from datetime import datetime, date
 from app.extensions import db
+# The season calendar is shared with the analysis service (the AI researches
+# the same season the pass is sold for), so it lives in analysis_core.
+from analysis_core.season import current_season, season_expiry  # noqa: F401
 
 FREE_QUERY_LIMIT = 10
-
-
-def current_season() -> int:
-    today = date.today()
-    return today.year if today.month < 9 else today.year + 1
-
-
-def season_expiry() -> date:
-    return date(date.today().year + 1, 9, 1)
 
 
 def has_season_access(user) -> bool:

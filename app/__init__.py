@@ -63,6 +63,14 @@ def create_app(config=None):
     app.register_blueprint(analysis_bp)
     app.register_blueprint(subscription_bp)
 
+    from analysis_core.season import current_season
+
+    @app.context_processor
+    def inject_season():
+        # Every page's title and heading name the season; computed per request
+        # so it rolls over without a restart.
+        return {"season": current_season()}
+
     with app.app_context():
         db.create_all()
 
