@@ -475,6 +475,12 @@
           return;
         }
 
+        // Never default a missing verdict to Pass or a missing risk to 0.
+        if (!['Draft', 'Pass'].includes(data.verdict) || typeof data.risk_score !== 'number') {
+          showError("Couldn't get a clear verdict for that player. Please try again.");
+          return;
+        }
+
         showResult(data);
       } catch (err) {
         showError('Network error — could not reach the server.');
@@ -492,7 +498,7 @@
       document.getElementById('verdictIcon').textContent = isDraft ? '✅' : '❌';
       document.getElementById('verdictText').textContent = isDraft ? 'DRAFT' : 'PASS';
 
-      const risk = d.risk_score ?? 0;
+      const risk = d.risk_score;
       const pct  = (risk / 10) * 100;
       const color = risk <= 3 ? '#3fb950' : risk <= 6 ? '#d29922' : '#f85149';
       const fill  = document.getElementById('riskFill');

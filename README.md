@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 2/10, and a one-sentence reason" width="560">
@@ -113,7 +113,7 @@ flowchart LR
 - **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **169 tests** (109 core + 60 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, and the analysis-service-down failure mode
+- **173 tests** (113 core + 60 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
 
 ---
 
@@ -198,8 +198,8 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 169 (core + analysis service)
-pytest tests/                   # just the core app (109)
+pytest                          # all 173 (core + analysis service)
+pytest tests/                   # just the core app (113)
 pytest analysis_service/tests/  # just the analysis service (60)
 ```
 
@@ -208,7 +208,7 @@ pytest analysis_service/tests/  # just the analysis service (60)
 ### Coverage
 
 **97% line coverage** across `app`, `analysis_core`, and `analysis_service`
-(742 statements, 23 missed; measured October 2026). `.coveragerc` defines the
+(746 statements, 23 missed; measured October 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
@@ -316,6 +316,11 @@ An Anthropic `429` propagated through the service is treated the same (503,
 retryable). An Anthropic backend error (`5xx` / connection) surfaces as `502`.
 None of these consume a query. The browser UI shows the message and lets the
 user retry.
+
+In **either** mode, if Claude answers but no risk score or verdict can be parsed
+from it (or the prompt-leak guard withholds the answer), `/analyze` returns
+**502** with a "couldn't get a clear verdict" message instead of an empty
+result, and that also doesn't consume a query.
 
 Check the analysis service directly at `GET /healthz` (`anthropic_configured`
 tells you whether its `ANTHROPIC_API_KEY` is set).

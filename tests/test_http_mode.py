@@ -62,6 +62,18 @@ def test_end_to_end_success(client, free_user, app, service, monkeypatch):
     assert queries_used(app) == 1
 
 
+def test_unparseable_answer_returns_502_and_does_not_charge(client, free_user, app, service, monkeypatch):
+    """The service passes an all-None verdict through; core must not show it."""
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: anthropic_client.WITHHELD_MESSAGE)
+    wire(app, AppSession(service))
+    login(client, "free@test.com")
+
+    res = post_analyze(client)
+    assert res.status_code == 502
+    assert "verdict" in res.get_json()["error"].lower()
+    assert queries_used(app) == 0
+
+
 def test_invalid_name_still_400(client, free_user, app, service):
     wire(app, AppSession(service))
     login(client, "free@test.com")
