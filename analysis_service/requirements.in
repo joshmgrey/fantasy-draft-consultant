@@ -1,0 +1,9 @@
+# Direct dependencies (analysis service). Edit this file, then run `make lock` to
+# regenerate analysis_service/requirements.txt, the pinned lock file that deploys install.
+# Run the service from the repo root so `analysis_core` is importable.
+flask>=3.0.0
+flask-sqlalchemy>=3.0.0
+psycopg[binary]>=3.2
+anthropic>=0.40.0
+tenacity>=8.2.0
+gunicorn>=21.0.0

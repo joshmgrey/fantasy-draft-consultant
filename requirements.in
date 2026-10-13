@@ -1,0 +1,13 @@
+# Direct dependencies (core app). Edit this file, then run `make lock` to
+# regenerate requirements.txt, the pinned lock file that deploys install.
+anthropic>=0.40.0
+flask>=3.0.0
+flask-sqlalchemy>=3.0.0
+flask-bcrypt>=1.0.1
+flask-login>=0.6.3
+flask-limiter>=3.5.0
+tenacity>=8.2.0
+requests>=2.31.0
+psycopg[binary]>=3.2
+stripe>=8.0.0
+gunicorn>=21.0.0
