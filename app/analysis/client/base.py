@@ -19,6 +19,13 @@ from analysis_core.models import PlayerVerdict
 # both client implementations and the route agree on the wording.
 BUSY_MESSAGE = "The analysis service is busy right now. Please try again in a minute."
 
+# Shown when the analysis ran but produced no usable verdict (the model ignored
+# the RISK:/VERDICT:/REASON: format, or the prompt-leak guard withheld it).
+INCOMPLETE_MESSAGE = (
+    "Couldn't get a clear verdict for that player. Please try again — "
+    "this query wasn't counted."
+)
+
 
 @dataclass(frozen=True)
 class Actor:

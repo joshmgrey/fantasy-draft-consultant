@@ -188,3 +188,23 @@ def test_analyze_increments_query_count(client, free_user, app):
         from app.identity.domain.models import User
         user = User.query.filter_by(email="free@test.com").first()
         assert user.queries_this_month == 1
+
+
+@pytest.mark.parametrize("verdict", [
+    PlayerVerdict(player="Justin Jefferson", risk_score=None, verdict=None, reason=None),
+    PlayerVerdict(player="Justin Jefferson", risk_score=None, verdict="Draft", reason="x"),
+    PlayerVerdict(player="Justin Jefferson", risk_score=3, verdict=None, reason="x"),
+], ids=["all-none", "no-risk", "no-verdict"])
+def test_analyze_incomplete_verdict_is_an_error_and_not_charged(client, free_user, app, verdict):
+    """An unparseable answer must not reach the UI as a verdict (it rendered as
+    "PASS 0/10") and must not spend a free query."""
+    login(client, "free@test.com")
+    use_fake(app, verdict=verdict)
+    res = post_analyze(client, "Justin Jefferson")
+    assert res.status_code == 502
+    body = res.get_json()
+    assert "verdict" in body["error"].lower() and "verdict" not in body
+    with app.app_context():
+        from app.identity.domain.models import User
+        user = User.query.filter_by(email="free@test.com").first()
+        assert user.queries_this_month == 0

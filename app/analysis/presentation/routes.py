@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from app.extensions import limiter
 from analysis_core.services import validate_player_name
 from app.analysis.client.base import (
+    INCOMPLETE_MESSAGE,
     Actor,
     AnalysisBadRequest,
     AnalysisNotConfigured,
@@ -61,6 +62,12 @@ def analyze():
         return jsonify({"error": str(e)}), 503
     except AnalysisUnavailable as e:
         return jsonify({"error": str(e)}), 502
+
+    # The client contract allows an all-None verdict. Showing it would render as
+    # a confident "Pass 0/10", so treat it as a failed analysis: error, no charge.
+    if result.verdict is None or result.risk_score is None:
+        current_app.logger.warning("analysis for %r produced no structured verdict", player_name)
+        return jsonify({"error": INCOMPLETE_MESSAGE}), 502
 
     increment_query(current_user)
     return jsonify(result.to_dict())
