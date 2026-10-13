@@ -1,5 +1,5 @@
 """
-Fantasy Football Draft Consultant — 2026 PPR
+Fantasy Football Draft Consultant — PPR, for the current season
 Usage: python draft_consultant.py "Player Name"
        python draft_consultant.py  (interactive mode)
 """
@@ -8,6 +8,8 @@ import os
 import re
 import sys
 import anthropic
+
+from analysis_core.season import current_season
 
 _api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not _api_key:
@@ -36,11 +38,12 @@ def _validate_player_name(name: str) -> str:
         )
     return name
 
-SYSTEM_PROMPT = """You are an elite fantasy football analyst specializing in 2026 PPR drafts.
+SYSTEM_PROMPT = """You are an elite fantasy football analyst specializing in PPR drafts.
 Your edge is identifying VALUE OVER ADP — players whose projected output exceeds their draft cost.
 
 When evaluating a player, you MUST:
-1. Search for their 2026 PPR fantasy projections (points, position rank, ADP)
+1. Search for their PPR fantasy projections for the season named in the request
+   (points, position rank, ADP)
 2. Search for recent news (trades, depth chart changes, target share, snap counts)
 3. Search for injury history and current injury risk
 
@@ -64,13 +67,14 @@ TOOLS = [
 def analyze_player(player_name: str) -> dict:
     """Run the draft consultant agent for a single player."""
     player_name = _validate_player_name(player_name)
+    season = current_season()
 
     messages = [
         {
             "role": "user",
             "content": (
-                f"Analyze the player named <player>{player_name}</player> for a 2026 PPR fantasy football draft. "
-                "Search for their 2026 projections, ADP, recent news, and injury risk, "
+                f"Analyze the player named <player>{player_name}</player> for a {season} PPR fantasy football draft. "
+                f"Search for their {season} projections, ADP, recent news, and injury risk, "
                 "then give me your Risk Score, Verdict, and Reason."
             ),
         }
@@ -193,7 +197,7 @@ def main():
     else:
         # Interactive mode
         print("━" * 55)
-        print("   🏈  2026 PPR DRAFT CONSULTANT")
+        print(f"   🏈  {current_season()} PPR DRAFT CONSULTANT")
         print("   Powered by Claude Opus 4.7 + Live Web Search")
         print("━" * 55)
         print("   Type a player name and press Enter.")
