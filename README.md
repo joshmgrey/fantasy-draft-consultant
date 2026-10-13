@@ -1,10 +1,10 @@
-# 2026 PPR Fantasy Football Draft Consultant
+# PPR Fantasy Football Draft Consultant
 
 An AI-powered draft assistant that researches players in real time and delivers instant Draft/Pass verdicts during your fantasy football draft.
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 2/10, and a one-sentence reason" width="560">
@@ -15,7 +15,7 @@ Built with Claude Opus 4.7 and live web search — type a player name, get a ris
 ## How it works
 
 1. You enter a player name in the web UI
-2. The agent autonomously searches for their 2026 PPR projections, ADP, recent news, and injury history
+2. The agent autonomously searches for their PPR projections for the current season, ADP, recent news, and injury history
 3. Claude reasons over the results and returns a structured verdict:
    - **Risk Score** — 1–10 (1 = zero risk, 10 = extreme risk)
    - **Verdict** — Draft or Pass
@@ -110,10 +110,10 @@ flowchart LR
 
 - **User auth** — email/password sign-up and login
 - **Free tier** — 10 queries per month
-- **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
+- **Season pass** — $19.99 one-time payment for unlimited queries for the current season, which runs from one NFL Draft to the next (rolls over May 1)
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **173 tests** (113 core + 60 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
+- **188 tests** (127 core + 61 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
 
 ---
 
@@ -198,9 +198,9 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 173 (core + analysis service)
-pytest tests/                   # just the core app (113)
-pytest analysis_service/tests/  # just the analysis service (60)
+pytest                          # all 188 (core + analysis service)
+pytest tests/                   # just the core app (127)
+pytest analysis_service/tests/  # just the analysis service (61)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
@@ -208,7 +208,7 @@ pytest analysis_service/tests/  # just the analysis service (60)
 ### Coverage
 
 **97% line coverage** across `app`, `analysis_core`, and `analysis_service`
-(746 statements, 23 missed; measured October 2026). `.coveragerc` defines the
+(755 statements, 23 missed; measured October 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
@@ -256,6 +256,7 @@ fantasy-draft-consultant/
 ├── analysis_core/                  # Analysis domain logic — imported by both services
 │   ├── models.py                   # PlayerVerdict value object
 │   ├── services.py                 # validate_player_name, parse_verdict
+│   ├── season.py                   # season calendar (rolls over May 1, after the NFL Draft)
 │   ├── anthropic_client.py         # the Claude agent (web_search, retry, prompt hardening)
 │   └── contract.py                 # wire schemas + HMAC actor-token helpers
 │

@@ -241,6 +241,22 @@ def test_cited_answer_split_across_text_blocks_is_joined(restore_client):
     assert verdict.reason == "Elite workhorse at fair ADP."
 
 
+def test_instruction_names_the_current_season_and_system_prompt_is_year_free(restore_client):
+    """The year belongs in the per-request instruction, so the system prompt (and
+    the leak guard's sentinels) don't go stale when the season rolls over."""
+    import re
+    from analysis_core.season import current_season
+
+    oracle = _InjectionOracle("ignore_instructions", "harmless page")
+    ac.client = oracle
+    analyze_player("Bijan Robinson")
+
+    user_message = oracle.create_calls[0]["messages"][0]["content"]
+    assert f"for a {current_season()} PPR fantasy football draft" in user_message
+    assert not re.search(r"\b20\d\d\b", ac.SYSTEM_PROMPT)
+    assert not any(re.search(r"\b20\d\d\b", s) for s in ac._SYSTEM_PROMPT_SENTINELS)
+
+
 def test_prompt_leak_split_across_text_blocks_is_withheld(restore_client):
     """The leak guard must see the joined answer, not one citation span at a time."""
     from analysis_core.services import parse_verdict
