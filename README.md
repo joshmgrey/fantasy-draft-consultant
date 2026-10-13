@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-190%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
@@ -113,7 +113,7 @@ flowchart LR
 - **Season pass** — $19.99 one-time payment for unlimited queries for the current season, which runs from one NFL Draft to the next (rolls over May 1)
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **188 tests** (127 core + 61 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
+- **190 tests** (129 core + 61 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
 
 ---
 
@@ -198,8 +198,8 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 188 (core + analysis service)
-pytest tests/                   # just the core app (127)
+pytest                          # all 190 (core + analysis service)
+pytest tests/                   # just the core app (129)
 pytest analysis_service/tests/  # just the analysis service (61)
 ```
 

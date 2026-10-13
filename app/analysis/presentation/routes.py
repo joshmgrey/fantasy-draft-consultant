@@ -70,4 +70,5 @@ def analyze():
         return jsonify({"error": INCOMPLETE_MESSAGE}), 502
 
     increment_query(current_user)
-    return jsonify(result.to_dict())
+    # Lets the page redraw its usage bar without a reload (None = season pass).
+    return jsonify({**result.to_dict(), "queries_remaining": queries_remaining(current_user)})
