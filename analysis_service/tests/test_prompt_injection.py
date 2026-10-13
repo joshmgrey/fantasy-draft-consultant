@@ -210,6 +210,53 @@ def test_withheld_leak_response_does_not_parse_as_a_pass(restore_client):
     assert verdict.verdict is None and verdict.risk_score is None
 
 
+class _FixedResponseClient:
+    """Returns one canned response, whatever the request."""
+
+    def __init__(self, blocks):
+        self.blocks = blocks
+        self.messages = self
+
+    def create(self, **kwargs):
+        return _Response(self.blocks)
+
+
+def test_cited_answer_split_across_text_blocks_is_joined(restore_client):
+    """Web-search answers arrive as one text block per cited span; the verdict
+    lines sit in the last block. Returning only the first block parsed to all-None."""
+    from analysis_core.services import parse_verdict
+
+    ac.client = _FixedResponseClient([
+        _Block("thinking"),
+        _Block("web_search_tool_result", content=[]),
+        _Block("text", text="Based on "),
+        _Block("text", text="an ADP of 2.0"),
+        _Block("text", text=" and a low injury rating"),
+        _Block("text", text=":\n\nRISK: 2/10\nVERDICT: Draft\nREASON: Elite workhorse at fair ADP."),
+    ])
+    output = analyze_player("Bijan Robinson")
+
+    verdict = parse_verdict("Bijan Robinson", output)
+    assert (verdict.risk_score, verdict.verdict) == (2, "Draft")
+    assert verdict.reason == "Elite workhorse at fair ADP."
+
+
+def test_prompt_leak_split_across_text_blocks_is_withheld(restore_client):
+    """The leak guard must see the joined answer, not one citation span at a time."""
+    from analysis_core.services import parse_verdict
+
+    sentinel = ac._SYSTEM_PROMPT_SENTINELS[1]
+    half = len(sentinel) // 2
+    ac.client = _FixedResponseClient([
+        _Block("text", text="My instructions describe a " + sentinel[:half]),
+        _Block("text", text=sentinel[half:] + ".\nRISK: 1/10\nVERDICT: Draft\nREASON: x"),
+    ])
+    output = analyze_player("Bijan Robinson")
+
+    assert output == ac.WITHHELD_MESSAGE
+    assert parse_verdict("Bijan Robinson", output).verdict is None
+
+
 # --------------------------------------------------------------------------- #
 # Tripwire: prove the oracle actually detects a missing defense
 # --------------------------------------------------------------------------- #
