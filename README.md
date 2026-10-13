@@ -4,7 +4,11 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 2/10, and a one-sentence reason" width="560">
+</p>
 
 ---
 
@@ -109,7 +113,7 @@ flowchart LR
 - **Season pass** — $19.99 one-time payment for unlimited queries through the draft season
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **167 tests** (109 core + 58 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, and the analysis-service-down failure mode
+- **169 tests** (109 core + 60 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, and the analysis-service-down failure mode
 
 ---
 
@@ -194,9 +198,9 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 167 (core + analysis service)
+pytest                          # all 169 (core + analysis service)
 pytest tests/                   # just the core app (109)
-pytest analysis_service/tests/  # just the analysis service (58)
+pytest analysis_service/tests/  # just the analysis service (60)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
@@ -204,7 +208,7 @@ pytest analysis_service/tests/  # just the analysis service (58)
 ### Coverage
 
 **97% line coverage** across `app`, `analysis_core`, and `analysis_service`
-(744 statements, 24 missed; measured October 2026). `.coveragerc` defines the
+(742 statements, 23 missed; measured October 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
