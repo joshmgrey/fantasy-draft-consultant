@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-167%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
 
 ---
 
@@ -43,6 +43,40 @@ The **analysis** context runs one of two ways, selected by `ANALYSIS_MODE`:
 Either way the core `/analyze` route goes through one `AnalysisClient` interface
 (`app/analysis/client/`), so the request flow and the tests are identical for
 both modes.
+
+```mermaid
+flowchart LR
+    browser["Browser<br/>(vanilla HTML/JS)"]
+    stripe["Stripe<br/>checkout + webhook"]
+    anthropic["Anthropic API<br/>Claude + server-side web_search"]
+
+    subgraph core["Core app (run.py)"]
+        identity["identity<br/>/login /signup"]
+        subscription["subscription<br/>/subscribe /webhook"]
+        analyze["/analyze route"]
+        client{"AnalysisClient<br/>ANALYSIS_MODE"}
+        analyze --> client
+    end
+    coredb[("Core DB<br/>users, usage, passes")]
+
+    lib["analysis_core<br/>validate → agent → parse_verdict"]
+
+    subgraph svc["Analysis service (http mode)"]
+        api["POST /v1/analyses<br/>verifies HMAC token"]
+        lib2["analysis_core"]
+        api --> lib2
+    end
+    svcdb[("Analysis DB<br/>audit log")]
+
+    browser --> identity & subscription & analyze
+    subscription <--> stripe
+    identity & subscription --> coredb
+    client -- "inprocess (default)" --> lib
+    client -- "http + HMAC actor token" --> api
+    api --> svcdb
+    lib --> anthropic
+    lib2 --> anthropic
+```
 
 ### The core ↔ analysis contract (`http` mode)
 
@@ -166,6 +200,17 @@ pytest analysis_service/tests/  # just the analysis service (58)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
+
+### Coverage
+
+**97% line coverage** across `app`, `analysis_core`, and `analysis_service`
+(744 statements, 24 missed; measured October 2026). `.coveragerc` defines the
+measured sources and excludes the tests and entry points.
+
+```bash
+pytest --cov --cov-report=term-missing   # summary in the terminal
+pytest --cov --cov-report=html           # browse htmlcov/index.html
+```
 
 ---
 
