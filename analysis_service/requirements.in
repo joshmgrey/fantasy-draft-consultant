@@ -7,3 +7,5 @@ psycopg[binary]>=3.2
 anthropic>=0.40.0
 tenacity>=8.2.0
 gunicorn>=21.0.0
+# Serves the PPR projection model; keep in step with requirements.in.
+scikit-learn==1.9.1

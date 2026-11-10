@@ -11,3 +11,6 @@ requests>=2.31.0
 psycopg[binary]>=3.2
 stripe>=8.0.0
 gunicorn>=21.0.0
+# Serves the PPR projection model (analysis_core/projection.py). The pin must
+# match the version that trained analysis_core/artifacts/ppr_projection.joblib.
+scikit-learn==1.9.1

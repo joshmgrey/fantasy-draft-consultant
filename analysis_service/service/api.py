@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, g, request
 from sqlalchemy import text
 
 from analysis_core import anthropic_client
+from analysis_core import projection as projection_model
 from analysis_core.contract import (
     ANALYZE_PATH,
     HEALTH_PATH,
@@ -83,8 +84,9 @@ def create_analysis():
     )
 
     started = time.monotonic()
+    projection = projection_model.project_player(name)
     try:
-        raw_text = anthropic_client.analyze_player(name)
+        raw_text = anthropic_client.analyze_player(name, projection=projection)
     except anthropic.RateLimitError:
         return error_response(
             ErrorCode.UPSTREAM_RATE_LIMITED,
@@ -106,6 +108,8 @@ def create_analysis():
     latency_ms = int((time.monotonic() - started) * 1000)
 
     verdict = parse_verdict(name, raw_text)
+    if projection is not None:
+        verdict.projected_ppg = projection.projected_ppg
     withheld = raw_text == anthropic_client.WITHHELD_MESSAGE
     notice = NOTICE_WITHHELD if withheld else None
 

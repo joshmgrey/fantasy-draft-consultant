@@ -29,7 +29,7 @@ def rows(app):
 
 
 def test_success_writes_a_record(client, app, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     res = post(client, auth_headers, player_name="Bijan Robinson", request_id="req_7")
 
     assert res.status_code == 200
@@ -49,7 +49,7 @@ def test_success_writes_a_record(client, app, auth_headers, configured, monkeypa
 
 def test_withheld_analysis_is_flagged(client, app, auth_headers, configured, monkeypatch):
     monkeypatch.setattr(anthropic_client, "analyze_player",
-                        lambda n: anthropic_client.WITHHELD_MESSAGE)
+                        lambda n, **_: anthropic_client.WITHHELD_MESSAGE)
     post(client, auth_headers, player_name="Bijan Robinson")
 
     (row,) = rows(app)
@@ -61,7 +61,7 @@ def test_failed_analyses_are_not_recorded(client, app, auth_headers, configured,
     # invalid name -> 400, no record
     post(client, auth_headers, player_name="Bad <x>")
     # upstream error -> 502, no record
-    def boom(n):
+    def boom(n, **_):
         raise anthropic.APIConnectionError(message="down", request=_req())
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)
     post(client, auth_headers, player_name="Bijan Robinson")
@@ -70,7 +70,7 @@ def test_failed_analyses_are_not_recorded(client, app, auth_headers, configured,
 
 
 def test_persistence_failure_does_not_break_analysis(client, app, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
 
     def explode(*args, **kwargs):
         raise RuntimeError("db is on fire")
@@ -85,7 +85,7 @@ def test_persistence_failure_does_not_break_analysis(client, app, auth_headers, 
 
 def test_persistence_can_be_disabled(auth_headers, configured, monkeypatch):
     from analysis_service.service import create_app
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     app = create_app({
         "ANALYSIS_TOKEN_SECRET": SECRET,
         "TOKEN_LEEWAY_SECONDS": 0,
@@ -102,7 +102,7 @@ def test_persistence_can_be_disabled(auth_headers, configured, monkeypatch):
 # GET /v1/analyses  (history)
 # --------------------------------------------------------------------------- #
 def test_history_returns_user_rows_newest_first(client, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     for name in ("Bijan Robinson", "Justin Jefferson", "Ja'Marr Chase"):
         post(client, auth_headers, player_name=name)
 
@@ -112,7 +112,7 @@ def test_history_returns_user_rows_newest_first(client, auth_headers, configured
 
 
 def test_history_is_scoped_by_user(client, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     post(client, auth_headers, player_name="Bijan Robinson")  # user 42
 
     other = {"Authorization": bearer_header(
@@ -122,7 +122,7 @@ def test_history_is_scoped_by_user(client, auth_headers, configured, monkeypatch
 
 
 def test_history_respects_limit(client, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     for _ in range(4):
         post(client, auth_headers, player_name="Bijan Robinson")
     items = client.get(f"{ANALYZE_PATH}?limit=2", headers=auth_headers).get_json()["items"]
@@ -132,7 +132,7 @@ def test_history_respects_limit(client, auth_headers, configured, monkeypatch):
 @pytest.mark.parametrize("limit", ["-1", "0", "-999"])
 def test_history_clamps_non_positive_limit(client, auth_headers, configured, monkeypatch, limit):
     """A negative limit must not become SQL 'LIMIT -1' (all rows / Postgres 500)."""
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     for _ in range(3):
         post(client, auth_headers, player_name="Bijan Robinson")
     res = client.get(f"{ANALYZE_PATH}?limit={limit}", headers=auth_headers)
