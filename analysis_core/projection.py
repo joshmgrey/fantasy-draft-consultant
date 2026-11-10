@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from .season import current_season
+
 log = logging.getLogger(__name__)
 
 ARTIFACT_FORMAT = "ppr-ppg-projection/1"
@@ -148,12 +150,33 @@ def get_projector() -> Optional[Projector]:
     return _projector
 
 
+_stale_warned: set = set()
+
+
 def project_player(player_name: str) -> Optional[Projection]:
     """Projection for ``player_name``, or ``None``. Never raises: the model is
-    an enhancement, and a failure here must not break the analysis."""
+    an enhancement, and a failure here must not break the analysis.
+
+    Only serves an artifact built for the *current* fantasy season. Checked on
+    every call rather than at load time, so a process that is running when the
+    season rolls over (May 1) stops serving last year's projections too.
+    """
     try:
         projector = get_projector()
-        return projector.project(player_name) if projector else None
+        if projector is None:
+            return None
+        season = current_season()
+        if projector.season != season:
+            if projector.season not in _stale_warned:
+                _stale_warned.add(projector.season)
+                log.warning(
+                    "projection model targets the %s season but it is now %s; "
+                    "retrain with `python -m ml.download && python -m ml.train`. "
+                    "Projections disabled.",
+                    projector.season, season,
+                )
+            return None
+        return projector.project(player_name)
     except Exception:
         log.exception("projection failed for %r", player_name)
         return None
@@ -165,3 +188,4 @@ def reset_projector() -> None:
     with _lock:
         _loaded = False
         _projector = None
+        _stale_warned.clear()

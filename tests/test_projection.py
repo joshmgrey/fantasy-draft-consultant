@@ -10,6 +10,7 @@ import sklearn
 from sklearn.linear_model import LinearRegression
 
 from analysis_core import anthropic_client, projection
+from analysis_core.season import current_season
 from analysis_core.projection import (
     ARTIFACT_FORMAT,
     Projection,
@@ -33,8 +34,8 @@ def _artifact(players=None, **overrides):
         "model": model,
         "features": ["a", "b", "c"],
         "sklearn_version": sklearn.__version__,
-        "feature_season": 2025,
-        "target_season": 2026,
+        "feature_season": current_season() - 1,
+        "target_season": current_season(),
         "model_name": "linear",
         "test_mae": 2.4,
         "players": players if players is not None else {
@@ -92,7 +93,7 @@ def test_projects_known_player_with_typed_variant_of_name(model_path):
     model_path()
     p = project_player("kenneth walker iii")
     assert p == Projection(
-        player="Kenneth Walker III", position="RB", team="SEA", season=2026,
+        player="Kenneth Walker III", position="RB", team="SEA", season=current_season(),
         projected_ppg=12.5, last_ppg=11.29, last_games=17, typical_error=2.4,
     )
 
@@ -160,6 +161,22 @@ def test_unreadable_artifact_disables_projection(tmp_path, monkeypatch):
     monkeypatch.setenv(projection.ARTIFACT_ENV, str(path))
     projection.reset_projector()
     assert project_player("Ja'Marr Chase") is None
+
+
+def test_stale_season_artifact_is_not_served(model_path, caplog):
+    model_path(target_season=current_season() - 1, feature_season=current_season() - 2)
+    with caplog.at_level(logging.WARNING):
+        assert project_player("Ja'Marr Chase") is None
+        assert project_player("Kenneth Walker") is None
+    assert caplog.text.count("retrain") == 1  # warned once, not per request
+
+
+def test_projections_stop_when_the_season_rolls_over_mid_process(model_path, monkeypatch):
+    model_path()
+    assert project_player("Kenneth Walker") is not None
+    rolled = current_season() + 1
+    monkeypatch.setattr(projection, "current_season", lambda: rolled)
+    assert project_player("Kenneth Walker") is None
 
 
 def test_prediction_error_is_swallowed(model_path, monkeypatch):

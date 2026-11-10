@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-240%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
@@ -58,7 +58,9 @@ so serving needs scikit-learn but not pandas or the network. The projection ente
 **trusted** `<model_projection>` block, outside the untrusted search-results fence.
 
 **Fallbacks.** If the artifact is missing, unreadable, or was built with a different scikit-learn
-version, or the player isn't in it (rookies), the analysis runs exactly as it did without the model.
+version, or was trained for an earlier season (checked on every request, so projections stop at the
+May 1 rollover until it is retrained), or the player isn't in it (rookies), the analysis runs exactly
+as it did without the model.
 
 **Limits.** The model only sees box scores. It doesn't know about trades, depth-chart changes, or
 injuries (Claude's web search covers those), and it predicts scoring *when a player plays*, not
@@ -165,7 +167,7 @@ flowchart LR
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
 - **Projection model** — scikit-learn model projecting PPR points per game, fed to Claude and shown on the result card
-- **240 tests** (177 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, serving, and fallbacks
+- **242 tests** (179 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, serving, and fallbacks
 
 ---
 
@@ -251,8 +253,8 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 240 (core + analysis service)
-pytest tests/                   # just the core app (177)
+pytest                          # all 242 (core + analysis service)
+pytest tests/                   # just the core app (179)
 pytest analysis_service/tests/  # just the analysis service (63)
 ```
 
@@ -261,7 +263,7 @@ pytest analysis_service/tests/  # just the analysis service (63)
 ### Coverage
 
 **98% line coverage** across `app`, `analysis_core`, `analysis_service`, and `ml`
-(1,073 statements, 23 missed; measured November 2026). `.coveragerc` defines the
+(1,084 statements, 23 missed; measured November 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
