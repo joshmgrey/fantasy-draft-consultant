@@ -13,3 +13,6 @@ venv/
 
 # Local Kubernetes secret material — copy secrets.example.env to secrets.env and fill it in.
 deploy/k8s/overlays/local/secrets.env
+
+# nflverse downloads for ml/ (python -m ml.download)
+ml/data/

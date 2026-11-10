@@ -99,7 +99,7 @@ def test_not_configured_is_503(client, auth_headers):
 # happy path + upstream failures
 # --------------------------------------------------------------------------- #
 def test_success_returns_verdict(client, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name, **_: CLEAN)
     res = post(client, auth_headers, player_name="Justin Jefferson", request_id="req_1")
     assert res.status_code == 200
     body = res.get_json()
@@ -113,7 +113,7 @@ def test_success_returns_verdict(client, auth_headers, configured, monkeypatch):
 def test_withheld_message_sets_notice_and_null_verdict(client, auth_headers, configured, monkeypatch):
     monkeypatch.setattr(
         anthropic_client, "analyze_player",
-        lambda name: anthropic_client.WITHHELD_MESSAGE,
+        lambda name, **_: anthropic_client.WITHHELD_MESSAGE,
     )
     res = post(client, auth_headers, player_name="Bijan Robinson")
     assert res.status_code == 200
@@ -123,7 +123,7 @@ def test_withheld_message_sets_notice_and_null_verdict(client, auth_headers, con
 
 
 def test_rate_limit_is_429(client, auth_headers, configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.RateLimitError(
             "rate limited", response=httpx2.Response(429, request=_request()), body=None)
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)
@@ -133,7 +133,7 @@ def test_rate_limit_is_429(client, auth_headers, configured, monkeypatch):
 
 
 def test_api_connection_error_is_502(client, auth_headers, configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.APIConnectionError(message="no route", request=_request())
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)
     res = post(client, auth_headers, player_name="Bijan Robinson")
@@ -150,7 +150,7 @@ def test_unexpected_error_is_contract_shaped_500(auth_headers, monkeypatch):
     })
     monkeypatch.setattr(anthropic_client, "client", object())
 
-    def boom(name):
+    def boom(name, **_):
         raise RuntimeError("kaboom internal detail")
 
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)

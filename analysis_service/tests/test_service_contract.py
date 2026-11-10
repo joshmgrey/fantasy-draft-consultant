@@ -23,7 +23,7 @@ def _request():
 
 
 def test_success_body_parses_as_AnalyzeResponse(client, auth_headers, configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name, **_: CLEAN)
     res = client.post(ANALYZE_PATH, json={"player_name": "Bijan Robinson"}, headers=auth_headers)
 
     parsed = AnalyzeResponse.from_wire(res.get_json())
@@ -59,7 +59,7 @@ def test_error_bodies_parse_as_ErrorResponse(client, auth_headers, make_request)
 
 
 def test_rate_limit_error_body_matches_contract(client, auth_headers, configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.RateLimitError(
             "rl", response=httpx2.Response(429, request=_request()), body=None)
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)

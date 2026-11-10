@@ -6,9 +6,11 @@ source =
     app
     analysis_core
     analysis_service
+    ml
 omit =
     */tests/*
     */conftest.py
+    conftest.py
     analysis_service/wsgi.py
     run.py
 

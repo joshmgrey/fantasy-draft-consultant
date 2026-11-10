@@ -40,7 +40,7 @@ def _analyze(name="Bijan Robinson"):
 
 
 def test_happy_path_returns_parsed_verdict(configured, monkeypatch):
-    monkeypatch.setattr(core, "analyze_player", lambda name: CLEAN)
+    monkeypatch.setattr(core, "analyze_player", lambda name, **_: CLEAN)
     result = _analyze()
     assert isinstance(result, PlayerVerdict)
     assert result.verdict == "Draft"
@@ -59,7 +59,7 @@ def test_invalid_name_raises_bad_request(configured):
 
 
 def test_rate_limit_error_becomes_rate_limited(configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.RateLimitError(
             "rate limited", response=httpx2.Response(429, request=_request()), body=None
         )
@@ -70,7 +70,7 @@ def test_rate_limit_error_becomes_rate_limited(configured, monkeypatch):
 
 
 def test_api_status_error_becomes_unavailable(configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.APIStatusError(
             "overloaded", response=httpx2.Response(529, request=_request()), body=None
         )
@@ -82,7 +82,7 @@ def test_api_status_error_becomes_unavailable(configured, monkeypatch):
 
 
 def test_api_connection_error_becomes_unavailable(configured, monkeypatch):
-    def boom(name):
+    def boom(name, **_):
         raise anthropic.APIConnectionError(message="no route to host", request=_request())
 
     monkeypatch.setattr(core, "analyze_player", boom)

@@ -128,6 +128,9 @@ class AnalyzeResponse:
     model: Optional[str] = None
     notice: Optional[str] = None
     analysis_id: Optional[str] = None
+    # Added in v1 as an optional field: older services omit it, and readers
+    # treat a missing key as null.
+    projected_ppg: Optional[float] = None
 
     def to_wire(self) -> dict:
         return {
@@ -138,6 +141,7 @@ class AnalyzeResponse:
             "model": self.model,
             "notice": self.notice,
             "analysis_id": self.analysis_id,
+            "projected_ppg": self.projected_ppg,
         }
 
     @classmethod
@@ -150,6 +154,12 @@ class AnalyzeResponse:
             risk is None or (isinstance(risk, int) and not isinstance(risk, bool)),
             "risk_score must be an integer or null",
         )
+        projected = data.get("projected_ppg")
+        _require(
+            projected is None
+            or (isinstance(projected, (int, float)) and not isinstance(projected, bool)),
+            "projected_ppg must be a number or null",
+        )
         return cls(
             player=player,
             risk_score=risk,
@@ -158,6 +168,7 @@ class AnalyzeResponse:
             model=_opt_str(data.get("model"), "model"),
             notice=_opt_str(data.get("notice"), "notice"),
             analysis_id=_opt_str(data.get("analysis_id"), "analysis_id"),
+            projected_ppg=None if projected is None else float(projected),
         )
 
     @classmethod
@@ -177,6 +188,7 @@ class AnalyzeResponse:
             model=model,
             notice=notice,
             analysis_id=analysis_id,
+            projected_ppg=verdict.projected_ppg,
         )
 
     def to_verdict(self) -> PlayerVerdict:
@@ -185,6 +197,7 @@ class AnalyzeResponse:
             risk_score=self.risk_score,
             verdict=self.verdict,
             reason=self.reason,
+            projected_ppg=self.projected_ppg,
         )
 
 

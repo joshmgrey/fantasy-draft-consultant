@@ -1,0 +1,182 @@
+{
+  "trained_on": "2026-11-10",
+  "data": "nflverse stats_player_reg (CC-BY 4.0)",
+  "seasons": [
+    2012,
+    2025
+  ],
+  "rows": {
+    "train": 3661,
+    "validation": 352,
+    "test": 371,
+    "final": 4384
+  },
+  "split": {
+    "train_target_seasons": [
+      2013,
+      2023
+    ],
+    "validation_target_season": 2024,
+    "test_target_season": 2025
+  },
+  "chosen_model": "hgb(lr=0.03,leaf=50,depth=5)",
+  "validation_leaderboard": [
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=5)",
+      "n": 352,
+      "mae": 2.63,
+      "rmse": 3.371,
+      "spearman": 0.792
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=5)",
+      "n": 352,
+      "mae": 2.632,
+      "rmse": 3.362,
+      "spearman": 0.796
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=3)",
+      "n": 352,
+      "mae": 2.641,
+      "rmse": 3.394,
+      "spearman": 0.792
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=3)",
+      "n": 352,
+      "mae": 2.642,
+      "rmse": 3.406,
+      "spearman": 0.789
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=3)",
+      "n": 352,
+      "mae": 2.647,
+      "rmse": 3.413,
+      "spearman": 0.787
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=5)",
+      "n": 352,
+      "mae": 2.651,
+      "rmse": 3.368,
+      "spearman": 0.794
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=3)",
+      "n": 352,
+      "mae": 2.66,
+      "rmse": 3.413,
+      "spearman": 0.789
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=5)",
+      "n": 352,
+      "mae": 2.673,
+      "rmse": 3.421,
+      "spearman": 0.788
+    },
+    {
+      "model": "ridge(alpha=100.0)",
+      "n": 352,
+      "mae": 2.759,
+      "rmse": 3.504,
+      "spearman": 0.78
+    },
+    {
+      "model": "ridge(alpha=10.0)",
+      "n": 352,
+      "mae": 2.767,
+      "rmse": 3.503,
+      "spearman": 0.779
+    },
+    {
+      "model": "ridge(alpha=1.0)",
+      "n": 352,
+      "mae": 2.773,
+      "rmse": 3.506,
+      "spearman": 0.78
+    }
+  ],
+  "test": {
+    "model": {
+      "overall": {
+        "n": 371,
+        "mae": 2.393,
+        "rmse": 3.118,
+        "spearman": 0.834
+      },
+      "QB": {
+        "n": 44,
+        "mae": 3.631,
+        "rmse": 4.41,
+        "spearman": 0.672
+      },
+      "RB": {
+        "n": 88,
+        "mae": 2.686,
+        "rmse": 3.464,
+        "spearman": 0.811
+      },
+      "WR": {
+        "n": 152,
+        "mae": 2.246,
+        "rmse": 2.855,
+        "spearman": 0.844
+      },
+      "TE": {
+        "n": 87,
+        "mae": 1.728,
+        "rmse": 2.289,
+        "spearman": 0.838
+      },
+      "relevant": {
+        "n": 124,
+        "mae": 2.881,
+        "rmse": 3.58,
+        "spearman": 0.658
+      }
+    },
+    "baseline": {
+      "overall": {
+        "n": 371,
+        "mae": 2.685,
+        "rmse": 3.567,
+        "spearman": 0.813
+      },
+      "QB": {
+        "n": 44,
+        "mae": 4.128,
+        "rmse": 4.993,
+        "spearman": 0.638
+      },
+      "RB": {
+        "n": 88,
+        "mae": 2.75,
+        "rmse": 3.733,
+        "spearman": 0.808
+      },
+      "WR": {
+        "n": 152,
+        "mae": 2.592,
+        "rmse": 3.401,
+        "spearman": 0.813
+      },
+      "TE": {
+        "n": 87,
+        "mae": 2.051,
+        "rmse": 2.712,
+        "spearman": 0.775
+      },
+      "relevant": {
+        "n": 124,
+        "mae": 3.561,
+        "rmse": 4.464,
+        "spearman": 0.55
+      }
+    }
+  },
+  "test_mae_improvement_vs_baseline_pct": 10.9,
+  "sklearn_version": "1.9.1"
+}

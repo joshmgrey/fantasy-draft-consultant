@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-198%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
@@ -15,13 +15,65 @@ Built with Claude Opus 4.7 and live web search — type a player name, get a ris
 ## How it works
 
 1. You enter a player name in the web UI
-2. The agent autonomously searches for their PPR projections for the current season, ADP, recent news, and injury history
-3. Claude reasons over the results and returns a structured verdict:
+2. An in-house **machine learning model** (scikit-learn) projects the player's PPR points per game for the season from past stats, if it knows the player
+3. The agent autonomously searches for their PPR projections for the current season, ADP, recent news, and injury history
+4. Claude weighs the model's projection against what it found and returns a structured verdict:
    - **Risk Score** — 1–10 (1 = zero risk, 10 = extreme risk)
    - **Verdict** — Draft or Pass
    - **Reason** — One sentence focused on value over ADP
 
 The agent uses Claude's server-side `web_search` tool, meaning Anthropic executes the searches automatically — no third-party search API needed.
+
+---
+
+## Projection model (machine learning)
+
+A gradient-boosted regression model predicts each player's **next-season PPR points per game**
+from his past stats. It gives Claude a stats-based anchor, and the result card shows it next to the verdict.
+
+| | |
+|---|---|
+| **Data** | [nflverse](https://github.com/nflverse/nflverse-data) regular-season player stats, 2012–2025 (CC-BY 4.0) |
+| **Features** | Last season's PPR points per game and games played, the season before, per-game usage (targets, carries, receptions, yards, TDs, EPA), target share, air-yards share, WOPR, age, experience, draft round, position |
+| **Label** | PPR points per game the following season (players with at least 4 games in both seasons) |
+| **Split** | By season, never random: train on target seasons 2013–2023, choose the model on 2024, score once on 2025 |
+| **Model** | `HistGradientBoostingRegressor` (absolute-error loss), chosen over 3 Ridge regression settings and 7 other gradient-boosting settings by validation MAE |
+
+**Held-out 2025 season** (371 players):
+
+| | MAE (pts/game) | Spearman rank correlation |
+|---|---|---|
+| Model | **2.393** | **0.834** |
+| Baseline: same as last season | 2.685 | 0.813 |
+| Model, fantasy-relevant players (≥ 10 PPG last season) | **2.881** | **0.658** |
+| Baseline, fantasy-relevant players | 3.561 | 0.55 |
+
+That is **10.9% lower error** than the baseline overall and **19.1% lower** for
+fantasy-relevant players. Full per-position results: [`ml/reports/REPORT.md`](ml/reports/REPORT.md).
+
+**How it is served.** `python -m ml.train` refits the chosen model on every season and exports one
+joblib artifact (`analysis_core/artifacts/ppr_projection.joblib`) with the estimator, the feature order,
+and the latest season's feature rows. The services load it once and look players up by normalized name,
+so serving needs scikit-learn but not pandas or the network. The projection enters the prompt as a
+**trusted** `<model_projection>` block, outside the untrusted search-results fence.
+
+**Fallbacks.** If the artifact is missing, unreadable, or was built with a different scikit-learn
+version, or was trained for an earlier season (checked on every request, so projections stop at the
+May 1 rollover until it is retrained), or the player isn't in it (rookies), the analysis runs exactly
+as it did without the model.
+
+**Limits.** The model only sees box scores. It doesn't know about trades, depth-chart changes, or
+injuries (Claude's web search covers those), and it predicts scoring *when a player plays*, not
+availability. Claude's verdicts are not backtested: web search returns today's news, so a backtest on
+past seasons would leak the future.
+
+```bash
+pip install -r requirements-dev.txt     # adds pandas for training
+python -m ml.download                   # nflverse CSVs -> ml/data/raw/ (gitignored)
+python -m ml.train                      # writes the artifact + ml/reports/
+```
+
+Retrain each May after the season rolls over, and whenever the scikit-learn pin changes.
 
 ---
 
@@ -99,6 +151,7 @@ flowchart LR
 - **Backend:** Python, Flask, SQLAlchemy, Flask-Login, Flask-Bcrypt
 - **Architecture:** Domain-Driven Design (DDD); optional core + analysis split over HTTP (`requests`, no RPC framework)
 - **AI:** Anthropic Claude Opus 4.7 with adaptive thinking and live web search
+- **Machine learning:** scikit-learn (gradient boosting), pandas for training, joblib artifact
 - **Payments:** Stripe one-time checkout
 - **Database:** SQLite (local), PostgreSQL (production); the analysis service has its own
 - **Frontend:** Vanilla HTML/CSS/JS (no framework dependencies)
@@ -113,7 +166,8 @@ flowchart LR
 - **Season pass** — $19.99 one-time payment for unlimited queries for the current season, which runs from one NFL Draft to the next (rolls over May 1)
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
-- **198 tests** (137 core + 61 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, and unparseable model answers
+- **Projection model** — scikit-learn model projecting PPR points per game, fed to Claude and shown on the result card
+- **242 tests** (179 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, serving, and fallbacks
 
 ---
 
@@ -191,6 +245,7 @@ analysis-service-down demo, and teardown.
 | `ANALYSIS_TOKEN_SECRET` | Shared HMAC secret for the core→analysis actor token (`http` mode) — **must be identical on both services** |
 | `ANALYSIS_CONNECT_TIMEOUT` / `ANALYSIS_READ_TIMEOUT` | Core→analysis HTTP timeouts in seconds (default `3` / `90`) |
 | `ANALYSIS_DATABASE_URL` | PostgreSQL URL for the **analysis service's own** database |
+| `PROJECTION_MODEL_PATH` | Optional. Path to the projection model artifact (default `analysis_core/artifacts/ppr_projection.joblib`) |
 
 ---
 
@@ -198,23 +253,45 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 198 (core + analysis service)
-pytest tests/                   # just the core app (137)
-pytest analysis_service/tests/  # just the analysis service (61)
+pytest                          # all 242 (core + analysis service)
+pytest tests/                   # just the core app (179)
+pytest analysis_service/tests/  # just the analysis service (63)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
 
 ### Coverage
 
-**97% line coverage** across `app`, `analysis_core`, and `analysis_service`
-(763 statements, 23 missed; measured October 2026). `.coveragerc` defines the
+**98% line coverage** across `app`, `analysis_core`, `analysis_service`, and `ml`
+(1,084 statements, 23 missed; measured November 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
 pytest --cov --cov-report=term-missing   # summary in the terminal
 pytest --cov --cov-report=html           # browse htmlcov/index.html
 ```
+
+---
+
+## Dependencies
+
+Each service lists its direct dependencies in a `requirements.in` file. The
+`requirements.txt` next to it is a **lock file** that pins every package,
+including indirect ones, to an exact version. Render, the Dockerfiles, and the
+install commands above all install the lock, so a deploy gets exactly the
+versions the tests ran against instead of whatever is newest that day.
+
+To add or change a dependency, edit the `.in` file and regenerate both locks
+(needs [uv](https://docs.astral.sh/uv/): `pip install uv`):
+
+```bash
+make lock
+```
+
+To move every pin to its latest version, run the two `uv pip compile` commands
+from the `lock` target in the `Makefile` with `--upgrade`, then run the tests.
+The locks are universal: one file works on Linux and Windows for Python 3.12
+and later.
 
 ---
 
@@ -258,7 +335,15 @@ fantasy-draft-consultant/
 │   ├── services.py                 # validate_player_name, parse_verdict
 │   ├── season.py                   # season calendar (rolls over May 1, after the NFL Draft)
 │   ├── anthropic_client.py         # the Claude agent (web_search, retry, prompt hardening)
-│   └── contract.py                 # wire schemas + HMAC actor-token helpers
+│   ├── contract.py                 # wire schemas + HMAC actor-token helpers
+│   ├── projection.py               # serves the PPR projection model (lookup, fallbacks)
+│   └── artifacts/ppr_projection.joblib  # trained model + latest-season features
+│
+├── ml/                             # Offline training (not deployed)
+│   ├── download.py                 # nflverse CSVs -> ml/data/raw/ (gitignored)
+│   ├── features.py                 # feature engineering (no future-season leakage)
+│   ├── train.py                    # season-based split, model selection, export
+│   └── reports/                    # REPORT.md + metrics.json from the last training run
 │
 ├── app/                            # Core service
 │   ├── __init__.py                 # app factory; selects the analysis client
@@ -274,7 +359,7 @@ fantasy-draft-consultant/
 │       └── presentation/routes.py  # /, /analyze
 │
 ├── analysis_service/               # Standalone analysis service (http mode)
-│   ├── wsgi.py  Dockerfile  Procfile  requirements.txt
+│   ├── wsgi.py  Dockerfile  Procfile  requirements.in  requirements.txt (lock)
 │   ├── service/
 │   │   ├── __init__.py             # app factory
 │   │   ├── api.py                  # POST/GET /v1/analyses, GET /healthz, GET /readyz
@@ -286,7 +371,10 @@ fantasy-draft-consultant/
 ├── templates/                      # index.html, login.html, signup.html
 ├── tests/                          # core suite (+ tests/http_shim.py)
 ├── draft_consultant.py             # standalone CLI version
-├── requirements.txt  requirements-dev.txt
+├── requirements.in                # direct dependencies (edit these)
+├── requirements.txt               # pinned lock, generated by `make lock`
+├── requirements-dev.txt           # test tools + pandas for training
+├── conftest.py                     # runs every test without the trained artifact
 ├── pytest.ini                      # pythonpath + testpaths (both trees)
 └── Procfile                        # core Render process config
 ```

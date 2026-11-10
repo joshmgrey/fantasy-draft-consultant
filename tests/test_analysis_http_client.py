@@ -59,7 +59,7 @@ def analyze(http_client, name="Justin Jefferson"):
 # happy path — the field-for-field contract check
 # --------------------------------------------------------------------------- #
 def test_success_round_trips_a_verdict(http_client, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     verdict = analyze(http_client)
     assert verdict.player == "Justin Jefferson"
     assert verdict.verdict == "Draft"
@@ -68,13 +68,13 @@ def test_success_round_trips_a_verdict(http_client, monkeypatch):
 
 def test_withheld_message_comes_back_as_null_verdict(http_client, monkeypatch):
     monkeypatch.setattr(anthropic_client, "analyze_player",
-                        lambda n: anthropic_client.WITHHELD_MESSAGE)
+                        lambda n, **_: anthropic_client.WITHHELD_MESSAGE)
     verdict = analyze(http_client)
     assert verdict.verdict is None and verdict.risk_score is None
 
 
 def test_sends_bearer_token_the_service_accepts(http_client, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     analyze(http_client)
     sent = http_client._session.calls[-1]["headers"]["Authorization"]
     assert sent.startswith("Bearer ")
@@ -89,7 +89,7 @@ def test_invalid_name_maps_to_bad_request(http_client):
 
 
 def test_service_429_maps_to_rate_limited(http_client, monkeypatch):
-    def boom(n):
+    def boom(n, **_):
         raise anthropic.RateLimitError(
             "rl", response=httpx2.Response(429, request=_req()), body=None)
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)
@@ -98,7 +98,7 @@ def test_service_429_maps_to_rate_limited(http_client, monkeypatch):
 
 
 def test_service_502_maps_to_unavailable(http_client, monkeypatch):
-    def boom(n):
+    def boom(n, **_):
         raise anthropic.APIConnectionError(message="down", request=_req())
     monkeypatch.setattr(anthropic_client, "analyze_player", boom)
     with pytest.raises(AnalysisUnavailable):

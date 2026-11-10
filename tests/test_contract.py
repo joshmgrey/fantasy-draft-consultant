@@ -77,7 +77,28 @@ def test_analyze_response_round_trips_all_null_verdict():
 
 def test_analyze_response_to_wire_keeps_all_keys():
     keys = set(AnalyzeResponse(player="x").to_wire())
-    assert keys == {"player", "risk_score", "verdict", "reason", "model", "notice", "analysis_id"}
+    assert keys == {
+        "player", "risk_score", "verdict", "reason", "model", "notice", "analysis_id",
+        "projected_ppg",
+    }
+
+
+def test_projected_ppg_round_trips_and_is_optional():
+    verdict = PlayerVerdict(
+        player="Bijan Robinson", risk_score=3, verdict="Draft", reason="Worth it.",
+        projected_ppg=18.1,
+    )
+    wire = AnalyzeResponse.from_verdict(verdict).to_wire()
+    assert AnalyzeResponse.from_wire(wire).to_verdict() == verdict
+    # An older service that doesn't send the key still parses.
+    del wire["projected_ppg"]
+    assert AnalyzeResponse.from_wire(wire).projected_ppg is None
+
+
+@pytest.mark.parametrize("bad", ["18.1", True, [18.1]])
+def test_analyze_response_rejects_non_numeric_projection(bad):
+    with pytest.raises(ContractError):
+        AnalyzeResponse.from_wire({"player": "x", "projected_ppg": bad})
 
 
 def test_from_verdict_and_back():

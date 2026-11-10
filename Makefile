@@ -1,6 +1,7 @@
-# Local Kubernetes (kind) workflow. See deploy/k8s/README.md.
+# Local Kubernetes (kind) workflow (see deploy/k8s/README.md), plus `make lock`
+# for the pinned dependency lock files.
 #
-# The Render deploy and docker-compose are unaffected by any of this.
+# The Render deploy and docker-compose are unaffected by the k8s targets.
 
 KIND_CLUSTER      ?= fantasy
 K8S_NS            ?= fantasy-local
@@ -9,6 +10,8 @@ CORE_IMAGE        ?= fantasy-core:local
 ANALYSIS_IMAGE    ?= fantasy-analysis:local
 # ingress-nginx release used for kind's provider manifest.
 INGRESS_NGINX_REF ?= controller-v1.11.3
+# Oldest Python the locks must support (Docker images: 3.12; Render: 3.14).
+LOCK_PYTHON       ?= 3.12
 
 KUBECTL := kubectl -n $(K8S_NS)
 
@@ -78,3 +81,16 @@ k8s-status: ## Show pods / services / ingress / PVCs
 k8s-logs: ## Tail logs from every pod in the stack
 	$(KUBECTL) logs -l app.kubernetes.io/part-of=fantasy-draft-consultant \
 		--all-containers --prefix --tail=100 -f
+
+# --- dependency locks ------------------------------------------------------------
+
+# requirements.in files list direct dependencies; the requirements.txt files are
+# the pinned locks Render and the Dockerfiles install. --universal writes one lock
+# valid on Linux and Windows for Python >= $(LOCK_PYTHON). Needs uv
+# (https://docs.astral.sh/uv/, `pip install uv`). Add --upgrade to move pins forward.
+LOCK_FLAGS := --universal --python-version $(LOCK_PYTHON) --custom-compile-command "make lock" -q
+
+.PHONY: lock
+lock: ## Regenerate both pinned requirements.txt locks from the .in files
+	uv pip compile requirements.in $(LOCK_FLAGS) -o requirements.txt
+	uv pip compile analysis_service/requirements.in $(LOCK_FLAGS) -o analysis_service/requirements.txt

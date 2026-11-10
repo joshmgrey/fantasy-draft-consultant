@@ -9,6 +9,7 @@ the ``/analyze`` route.
 import anthropic
 
 from analysis_core import anthropic_client as _core
+from analysis_core import projection as _projection
 from analysis_core.models import PlayerVerdict
 from analysis_core.services import parse_verdict, validate_player_name
 
@@ -34,8 +35,9 @@ class InProcessAnalysisClient:
         except ValueError as e:
             raise AnalysisBadRequest(str(e)) from e
 
+        projection = _projection.project_player(name)
         try:
-            raw_text = _core.analyze_player(name)
+            raw_text = _core.analyze_player(name, projection=projection)
         except anthropic.RateLimitError as e:
             # RateLimitError is a subclass of APIStatusError — catch it first.
             raise AnalysisRateLimited(BUSY_MESSAGE) from e
@@ -48,4 +50,7 @@ class InProcessAnalysisClient:
                 "Could not reach Anthropic API. Check your connection."
             ) from e
 
-        return parse_verdict(name, raw_text)
+        verdict = parse_verdict(name, raw_text)
+        if projection is not None:
+            verdict.projected_ppg = projection.projected_ppg
+        return verdict

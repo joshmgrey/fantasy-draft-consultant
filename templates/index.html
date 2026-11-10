@@ -436,6 +436,10 @@
         <label>Analysis</label>
         <p id="resultReason"></p>
       </div>
+      <div class="reason-section" id="projectionSection" style="display: none">
+        <label>Model Projection</label>
+        <p id="resultProjection"></p>
+      </div>
     </div>
   </div>
 
@@ -509,6 +513,16 @@
       document.getElementById('riskLabel').style.color = color;
 
       document.getElementById('resultReason').textContent = d.reason ?? '—';
+
+      // Shown only when the stats model knows the player (not rookies).
+      const projSection = document.getElementById('projectionSection');
+      if (typeof d.projected_ppg === 'number') {
+        document.getElementById('resultProjection').textContent =
+          d.projected_ppg.toFixed(1) + ' PPR points per game (stats-only model)';
+        projSection.style.display = '';
+      } else {
+        projSection.style.display = 'none';
+      }
 
       show('resultCard');
     }

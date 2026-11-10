@@ -51,7 +51,7 @@ def queries_used(app, email="free@test.com"):
 
 
 def test_end_to_end_success(client, free_user, app, service, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: CLEAN)
     wire(app, AppSession(service))
     login(client, "free@test.com")
 
@@ -64,7 +64,7 @@ def test_end_to_end_success(client, free_user, app, service, monkeypatch):
 
 def test_unparseable_answer_returns_502_and_does_not_charge(client, free_user, app, service, monkeypatch):
     """The service passes an all-None verdict through; core must not show it."""
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n: anthropic_client.WITHHELD_MESSAGE)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda n, **_: anthropic_client.WITHHELD_MESSAGE)
     wire(app, AppSession(service))
     login(client, "free@test.com")
 
