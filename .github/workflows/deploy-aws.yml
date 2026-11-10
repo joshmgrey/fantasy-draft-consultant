@@ -1,0 +1,110 @@
+# Builds both images, pushes them to ECR and deploys the CDK app in infra/.
+#
+# Authenticates with GitHub OIDC: no AWS keys are stored in the repo. Needs
+# these repository *variables* (Settings > Secrets and variables > Actions >
+# Variables), all set up in infra/README.md, "One-time bootstrap":
+#
+#   AWS_DEPLOY_ROLE_ARN   output DeployRoleArn of the FdcGithubOidc stack
+#   AWS_REGION            e.g. us-east-1
+#   DOMAIN_NAME, HOSTED_ZONE_ID, HOSTED_ZONE_NAME, CERTIFICATE_ARN  (optional)
+#
+# Until AWS_DEPLOY_ROLE_ARN and AWS_REGION are set the job is skipped, so
+# pushes to main keep working while the app still runs on Render.
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # to request the OIDC token
+  contents: read
+
+# Never run two deploys at once; queue the newer one instead of cancelling a
+# CloudFormation update halfway.
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Test the stacks
+        working-directory: infra
+        run: npm test
+
+      - name: Assume the deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # The repos live in their own stack so they exist before the first push.
+      - name: Deploy ECR repositories
+        working-directory: infra
+        run: npx cdk deploy FdcEcr --require-approval never
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push core image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/fdc/core:${{ env.IMAGE_TAG }}
+            ${{ steps.ecr.outputs.registry }}/fdc/core:latest
+          cache-from: type=gha,scope=core
+          cache-to: type=gha,mode=max,scope=core
+
+      - name: Build and push analysis image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: analysis_service/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/fdc/analysis:${{ env.IMAGE_TAG }}
+            ${{ steps.ecr.outputs.registry }}/fdc/analysis:latest
+          cache-from: type=gha,scope=analysis
+          cache-to: type=gha,mode=max,scope=analysis
+
+      # Waits for both ECS services to stabilize; a failing deployment trips
+      # the circuit breaker, ECS rolls back, and this step fails.
+      - name: Deploy app stack
+        working-directory: infra
+        run: >-
+          npx cdk deploy FdcApp --require-approval never
+          -c imageTag="$IMAGE_TAG"
+          -c domainName="${{ vars.DOMAIN_NAME }}"
+          -c hostedZoneId="${{ vars.HOSTED_ZONE_ID }}"
+          -c hostedZoneName="${{ vars.HOSTED_ZONE_NAME }}"
+          -c certificateArn="${{ vars.CERTIFICATE_ARN }}"

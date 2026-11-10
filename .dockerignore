@@ -13,3 +13,6 @@ tests
 analysis_service/tests
 docs
 *.md
+
+# CDK app (its node_modules alone is hundreds of MB of build context)
+infra
