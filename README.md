@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-257%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
@@ -68,10 +68,19 @@ availability. Claude's verdicts are not backtested: web search returns today's n
 past seasons would leak the future.
 
 ```bash
-pip install -r requirements-dev.txt     # adds pandas for training
+pip install -r requirements-dev.txt     # adds pandas + MLflow for training
 python -m ml.download                   # nflverse CSVs -> ml/data/raw/ (gitignored)
-python -m ml.train                      # writes the artifact + ml/reports/
+python -m ml.train                      # writes the artifact + ml/reports/, tracks the run in MLflow
+mlflow ui --backend-store-uri sqlite:///ml/mlflow.db   # browse runs and model versions
 ```
+
+**Experiment tracking (MLflow).** Every training run is logged to MLflow: one parent run with the
+data window, split, test scores, report files and serving artifact, plus a nested child run for each
+of the 11 model configurations with its hyperparameters and validation scores. The final model is
+registered as a new version of `ppr-projection`, and its run ID is stamped into the serving artifact
+and `ml/reports/metrics.json`, so any deployed model can be traced back to the run that produced it.
+Runs go to `ml/mlflow.db` (gitignored) unless `MLFLOW_TRACKING_URI` points at a tracking server.
+MLflow is training-only and optional: `--no-mlflow` trains without it, and the services never import it.
 
 Retrain each May after the season rolls over, and whenever the scikit-learn pin changes.
 
@@ -151,7 +160,7 @@ flowchart LR
 - **Backend:** Python, Flask, SQLAlchemy, Flask-Login, Flask-Bcrypt
 - **Architecture:** Domain-Driven Design (DDD); optional core + analysis split over HTTP (`requests`, no RPC framework)
 - **AI:** Anthropic Claude Opus 4.7 with adaptive thinking and live web search
-- **Machine learning:** scikit-learn (gradient boosting), pandas for training, joblib artifact
+- **Machine learning:** scikit-learn (gradient boosting), pandas for training, MLflow for experiment tracking and the model registry, joblib artifact
 - **Payments:** Stripe one-time checkout
 - **Database:** SQLite (local), PostgreSQL (production); the analysis service has its own
 - **Frontend:** Vanilla HTML/CSS/JS (no framework dependencies)
@@ -167,7 +176,7 @@ flowchart LR
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
 - **Projection model** — scikit-learn model projecting PPR points per game, fed to Claude and shown on the result card
-- **242 tests** (179 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, serving, and fallbacks
+- **257 tests** (194 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, MLflow tracking, serving, and fallbacks
 
 ---
 
@@ -253,8 +262,8 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 242 (core + analysis service)
-pytest tests/                   # just the core app (179)
+pytest                          # all 257 (core + analysis service)
+pytest tests/                   # just the core app (194)
 pytest analysis_service/tests/  # just the analysis service (63)
 ```
 
@@ -263,7 +272,7 @@ pytest analysis_service/tests/  # just the analysis service (63)
 ### Coverage
 
 **98% line coverage** across `app`, `analysis_core`, `analysis_service`, and `ml`
-(1,084 statements, 23 missed; measured November 2026). `.coveragerc` defines the
+(1,197 statements, 23 missed; measured November 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
@@ -343,6 +352,7 @@ fantasy-draft-consultant/
 │   ├── download.py                 # nflverse CSVs -> ml/data/raw/ (gitignored)
 │   ├── features.py                 # feature engineering (no future-season leakage)
 │   ├── train.py                    # season-based split, model selection, export
+│   ├── tracking.py                 # MLflow runs + model registry (optional)
 │   └── reports/                    # REPORT.md + metrics.json from the last training run
 │
 ├── app/                            # Core service
@@ -373,7 +383,7 @@ fantasy-draft-consultant/
 ├── draft_consultant.py             # standalone CLI version
 ├── requirements.in                # direct dependencies (edit these)
 ├── requirements.txt               # pinned lock, generated by `make lock`
-├── requirements-dev.txt           # test tools + pandas for training
+├── requirements-dev.txt           # test tools + pandas and MLflow for training
 ├── conftest.py                     # runs every test without the trained artifact
 ├── pytest.ini                      # pythonpath + testpaths (both trees)
 └── Procfile                        # core Render process config
