@@ -16,3 +16,7 @@ deploy/k8s/overlays/local/secrets.env
 
 # nflverse downloads for ml/ (python -m ml.download)
 ml/data/
+# MLflow tracking store from python -m ml.train (see ml/tracking.py)
+ml/mlflow.db
+ml/mlartifacts/
+mlruns/

@@ -14,6 +14,13 @@ Every candidate must beat the naive baseline "next season = last season's
 PPR points per game". The winner is refit on every season and exported with
 the latest season's feature rows, so the services can project the upcoming
 season without pandas.
+
+Every run is tracked in MLflow when it is installed (see ``ml/tracking.py``):
+one child run per candidate, the test scores and reports on the parent run,
+and the final model registered as a new ``ppr-projection`` version.
+
+    python -m ml.train --no-mlflow     # train without tracking
+    mlflow ui --backend-store-uri sqlite:///ml/mlflow.db
 """
 
 from __future__ import annotations
@@ -39,6 +46,7 @@ from analysis_core.projection import ARTIFACT_FORMAT, DEFAULT_ARTIFACT_PATH
 from analysis_core.season import current_season
 
 from . import features as F
+from .tracking import NullTracker, make_tracker
 
 ML_DIR = Path(__file__).parent
 RAW_DIR = ML_DIR / "data" / "raw"
@@ -51,6 +59,7 @@ SEED = 7
 class Candidate:
     name: str
     build: Callable[[], object]
+    params: dict
 
 
 def candidates() -> list[Candidate]:
@@ -66,11 +75,19 @@ def candidates() -> list[Candidate]:
             early_stopping=False, random_state=SEED,
         )
 
-    out = [Candidate(f"ridge(alpha={a})", ridge(a)) for a in (1.0, 10.0, 100.0)]
+    out = [
+        Candidate(f"ridge(alpha={a})", ridge(a), {"model_type": "ridge", "alpha": a})
+        for a in (1.0, 10.0, 100.0)
+    ]
     for lr in (0.03, 0.06):
         for leaf in (20, 50):
             for depth in (3, 5):
-                out.append(Candidate(f"hgb(lr={lr},leaf={leaf},depth={depth})", hgb(lr, leaf, depth)))
+                out.append(Candidate(
+                    f"hgb(lr={lr},leaf={leaf},depth={depth})", hgb(lr, leaf, depth),
+                    {"model_type": "hist_gradient_boosting", "learning_rate": lr,
+                     "min_samples_leaf": leaf, "max_depth": depth, "max_iter": 400,
+                     "loss": "absolute_error"},
+                ))
     return out
 
 
@@ -110,7 +127,10 @@ def split(table: pd.DataFrame, last_target: int):
     return train, val, test
 
 
-def select_model(train: pd.DataFrame, val: pd.DataFrame) -> tuple[Candidate, list[dict]]:
+def select_model(
+    train: pd.DataFrame, val: pd.DataFrame, tracker: Optional[NullTracker] = None
+) -> tuple[Candidate, list[dict]]:
+    tracker = tracker or NullTracker()
     X_tr, y_tr = F.feature_matrix(train), train["target_ppg"].to_numpy()
     X_val, y_val = F.feature_matrix(val), val["target_ppg"].to_numpy()
     results = []
@@ -119,6 +139,7 @@ def select_model(train: pd.DataFrame, val: pd.DataFrame) -> tuple[Candidate, lis
         model = cand.build().fit(X_tr, y_tr)
         score = metrics(y_val, model.predict(X_val))
         results.append({"model": cand.name, **score})
+        tracker.log_candidate(cand.name, cand.params, score)
         if best is None or score["mae"] < best[0]:
             best = (score["mae"], cand)
     return best[1], results
@@ -145,13 +166,27 @@ def serving_rows(rows: pd.DataFrame, feature_season: int) -> dict:
     return players
 
 
-def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path) -> dict:
+def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path,
+        tracker: Optional[NullTracker] = None, *, register: bool = True) -> dict:
+    with tracker or NullTracker() as tr:
+        return _run(raw_dir, first, last, out, report_dir, tr, register)
+
+
+def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
     stats = F.load_season_stats(raw_dir, range(first, last + 1))
     rows = F.season_rows(stats, F.load_players(raw_dir))
     table = F.training_table(rows)
 
     train, val, test = split(table, last)
-    best, leaderboard = select_model(train, val)
+    tracker.log_params({
+        "first_season": first, "last_season": last,
+        "train_target_seasons": f"{first + 1}-{last - 2}",
+        "validation_target_season": last - 1, "test_target_season": last,
+        "n_features": len(F.FEATURES), "min_games": F.MIN_GAMES,
+        "rows_train": len(train), "rows_validation": len(val), "rows_test": len(test),
+        "seed": SEED, "sklearn_version": sklearn.__version__,
+    })
+    best, leaderboard = select_model(train, val, tracker)
 
     # Score the chosen configuration once on the untouched test season,
     # trained on train + validation.
@@ -183,6 +218,7 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path) -> di
         "test": test_scores,
         "test_mae_improvement_vs_baseline_pct": improvement,
         "sklearn_version": sklearn.__version__,
+        "mlflow_run_id": tracker.run_id,
     }
 
     artifact = {
@@ -194,6 +230,8 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path) -> di
         "target_season": last + 1,
         "model_name": best.name,
         "test_mae": model_mae,
+        # Ties a deployed artifact back to the MLflow run that produced it.
+        "mlflow_run_id": tracker.run_id,
         "players": serving_rows(rows, last),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -202,6 +240,16 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path) -> di
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "metrics.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     (report_dir / "REPORT.md").write_text(render_report(report), encoding="utf-8")
+
+    tracker.log_params({"chosen_model": best.name, **{f"chosen_{k}": v for k, v in best.params.items()}})
+    tracker.log_metrics({
+        "test": test_scores,
+        "test_mae_improvement_vs_baseline_pct": improvement,
+        "rows_final": len(table),
+    })
+    tracker.log_artifacts([report_dir / "REPORT.md", report_dir / "metrics.json", out])
+    tracker.log_model(final, F.feature_matrix(table), register=register)
+    report["mlflow_model_version"] = tracker.model_version
     return report
 
 
@@ -263,9 +311,19 @@ def main(argv=None) -> None:
     parser.add_argument("--last", type=int, default=current_season() - 1)
     parser.add_argument("--out", type=Path, default=DEFAULT_ARTIFACT_PATH)
     parser.add_argument("--reports", type=Path, default=REPORT_DIR)
+    parser.add_argument("--no-mlflow", action="store_true", help="train without MLflow tracking")
+    parser.add_argument("--no-register", action="store_true",
+                        help="track the run but don't register a model version")
+    parser.add_argument("--tracking-uri", default=None,
+                        help="MLflow tracking URI (default: $MLFLOW_TRACKING_URI or ml/mlflow.db)")
     args = parser.parse_args(argv)
-    report = run(args.raw, args.first, args.last, args.out, args.reports)
-    print(json.dumps({k: report[k] for k in ("chosen_model", "test_mae_improvement_vs_baseline_pct")}))
+    tracker = make_tracker(enabled=not args.no_mlflow, tracking_uri=args.tracking_uri,
+                           run_name=f"train-{args.first}-{args.last}")
+    report = run(args.raw, args.first, args.last, args.out, args.reports, tracker,
+                 register=not args.no_register)
+    print(json.dumps({k: report.get(k) for k in (
+        "chosen_model", "test_mae_improvement_vs_baseline_pct",
+        "mlflow_run_id", "mlflow_model_version")}))
     print(json.dumps(report["test"]["model"]["overall"]), json.dumps(report["test"]["baseline"]["overall"]))
 
 

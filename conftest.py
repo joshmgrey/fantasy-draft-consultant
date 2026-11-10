@@ -14,6 +14,9 @@ def _no_projection_model(monkeypatch, tmp_path):
     artifact they build themselves (see ``tests/test_projection.py``).
     """
     monkeypatch.setenv(projection.ARTIFACT_ENV, str(tmp_path / "no-model.joblib"))
+    # Any MLflow tracking a test triggers goes to a throwaway store, never
+    # ml/mlflow.db.
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{(tmp_path / 'mlflow.db').as_posix()}")
     projection.reset_projector()
     yield
     projection.reset_projector()
