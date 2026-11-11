@@ -2,7 +2,7 @@
 
 import pytest
 
-from analysis_core import projection
+from analysis_core import projection, retrieval
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +14,10 @@ def _no_projection_model(monkeypatch, tmp_path):
     artifact they build themselves (see ``tests/test_projection.py``).
     """
     monkeypatch.setenv(projection.ARTIFACT_ENV, str(tmp_path / "no-model.joblib"))
+    # No retrieval store either: tests that exercise RAG build their own.
+    monkeypatch.delenv(retrieval.DATABASE_ENV, raising=False)
     projection.reset_projector()
+    retrieval.reset_retriever()
     yield
     projection.reset_projector()
+    retrieval.reset_retriever()

@@ -21,7 +21,7 @@ def test_projection_reaches_prompt_and_response(client, auth_headers, configured
     seen = {}
     monkeypatch.setattr(projection_model, "project_player", lambda name: SAMPLE)
 
-    def fake(name, projection=None):
+    def fake(name, projection=None, **_):
         seen["projection"] = projection
         return CLEAN
 

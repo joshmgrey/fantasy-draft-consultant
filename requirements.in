@@ -14,3 +14,7 @@ gunicorn>=21.0.0
 # Serves the PPR projection model (analysis_core/projection.py). The pin must
 # match the version that trained analysis_core/artifacts/ppr_projection.joblib.
 scikit-learn==1.9.1
+# Retrieval (RAG): pgvector store via LangChain, embeddings via fastembed (ONNX).
+langchain-core>=1.0
+langchain-postgres>=0.0.19
+fastembed>=0.9

@@ -63,6 +63,9 @@ spec:
                   key: ANALYSIS_DB_PASSWORD
             - name: ANALYSIS_DATABASE_URL
               value: postgresql://analysis:$(ANALYSIS_DB_PASSWORD)@analysis-db:5432/analysis
+            # Retrieval (RAG): the pgvector collection lives in the same database.
+            - name: RAG_DATABASE_URL
+              value: postgresql://analysis:$(ANALYSIS_DB_PASSWORD)@analysis-db:5432/analysis
           # Liveness: the gunicorn worker is up. No I/O (does not check the DB
           # or Anthropic) — a failure means the process is wedged, so restart.
           livenessProbe:

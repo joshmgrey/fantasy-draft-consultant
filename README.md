@@ -4,7 +4,7 @@ An AI-powered draft assistant that researches players in real time and delivers 
 
 Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-242%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange) ![Tests](https://img.shields.io/badge/tests-274%20passing-brightgreen) ![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Analyzing Bijan Robinson: Draft verdict, risk score 3/10, and a one-sentence reason" width="560">
@@ -16,8 +16,9 @@ Built with Claude Opus 4.7 and live web search — type a player name, get a ris
 
 1. You enter a player name in the web UI
 2. An in-house **machine learning model** (scikit-learn) projects the player's PPR points per game for the season from past stats, if it knows the player
-3. The agent autonomously searches for their PPR projections for the current season, ADP, recent news, and injury history
-4. Claude weighs the model's projection against what it found and returns a structured verdict:
+3. **Retrieval (RAG)** pulls the player's injury and availability history from a pgvector store
+4. The agent autonomously searches for their PPR projections for the current season, ADP, recent news, and injury history
+5. Claude weighs the model's projection and the retrieved history against what it found and returns a structured verdict:
    - **Risk Score** — 1–10 (1 = zero risk, 10 = extreme risk)
    - **Verdict** — Draft or Pass
    - **Reason** — One sentence focused on value over ADP
@@ -74,6 +75,58 @@ python -m ml.train                      # writes the artifact + ml/reports/
 ```
 
 Retrain each May after the season rolls over, and whenever the scikit-learn pin changes.
+
+---
+
+## Retrieval (RAG): injury history from pgvector
+
+Before Claude runs, the app retrieves the player's **injury and availability history** from a
+vector store and adds it to the prompt as fenced, untrusted retrieved content. This grounds the
+risk score in the same data every time, rather than whatever a web search happens to return.
+
+**Corpus.** One document per QB/RB/WR/TE season, 2012–2025 (about 8,000), built from nflverse:
+games played out of the team's games, PPR points per game, role (carries, targets, target share),
+offensive snap share, and the weekly injury reports (games listed out/doubtful/questionable,
+injury types, missed practices). Past seasons also note what happened the next season.
+
+**Pipeline.**
+
+| | |
+|---|---|
+| **Embeddings** | `BAAI/bge-small-en-v1.5` (Hugging Face) through fastembed: ONNX, no PyTorch. Queries use the model's retrieval instruction. |
+| **Vector store** | Postgres + **pgvector** via LangChain's `PGVector` (`langchain-postgres`), in the analysis database |
+| **Indexing** | `python -m ml.rag.index` embeds each season's profile and rebuilds the `player_seasons` collection |
+| **Query** | The injury-focused query is embedded live, then cosine search runs filtered to the player (metadata filter), keeping the 3 most injury-relevant seasons, shown newest first |
+
+**Evaluation** ([`ml/reports/RAG_REPORT.md`](ml/reports/RAG_REPORT.md)). Among 232 players with
+several recent seasons, one clearly worst for injuries, the retrieval ranks that season first
+**86% of the time**, versus 38% for "most recent season first" and 39% for random order.
+
+**What was cut, and why.** I also built *comparables*: the most similar past player-seasons and
+what happened to them the next year. Predicting next-season scoring from them
+(this season + their average change) did **not** beat a plain position average. On the 2024
+validation season, MAE was 3.22 with names in the embedded text and 3.06 with names and teams
+removed, versus 2.93 for the position average. It only helped for fantasy-relevant players
+(3.47 vs 3.59), a slice too small to pick after the fact. Text embeddings of box-score numbers
+don't capture numeric similarity well, so comparables are evaluated but not served.
+
+**Fallbacks.** Without `RAG_DATABASE_URL`, without the packages, or on any database or model
+error, retrieval returns nothing and the analysis runs as before.
+
+```bash
+python -m ml.download                       # also fetches injury reports + snap counts
+RAG_DATABASE_URL=postgresql://... python -m ml.rag.index    # needs pgvector; rebuilds the collection
+python -m ml.rag.evaluate                   # writes ml/reports/RAG_REPORT.md (no database needed)
+```
+
+Locally, `docker compose up` runs the analysis database as `pgvector/pgvector:pg16`, published on
+`localhost:5433`. Index it once from the host:
+
+```bash
+RAG_DATABASE_URL=postgresql://analysis:analysis@localhost:5433/analysis python -m ml.rag.index
+```
+
+Re-index each May after the season rolls over.
 
 ---
 
@@ -152,6 +205,7 @@ flowchart LR
 - **Architecture:** Domain-Driven Design (DDD); optional core + analysis split over HTTP (`requests`, no RPC framework)
 - **AI:** Anthropic Claude Opus 4.7 with adaptive thinking and live web search
 - **Machine learning:** scikit-learn (gradient boosting), pandas for training, joblib artifact
+- **Retrieval (RAG):** LangChain, Postgres + pgvector, fastembed with a Hugging Face embedding model (ONNX)
 - **Payments:** Stripe one-time checkout
 - **Database:** SQLite (local), PostgreSQL (production); the analysis service has its own
 - **Frontend:** Vanilla HTML/CSS/JS (no framework dependencies)
@@ -167,7 +221,7 @@ flowchart LR
 - **Stripe integration** — secure checkout and webhook-based access grants
 - **Rate limiting** — per-user cap on `/analyze` plus retry-with-backoff on Anthropic 429s
 - **Projection model** — scikit-learn model projecting PPR points per game, fed to Claude and shown on the result card
-- **242 tests** (179 core + 63 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, and the projection model's features, training, serving, and fallbacks
+- **274 tests** (209 core + 65 analysis service) — auth, analysis, usage limits, Stripe webhooks, prompt-injection defenses, rate limiting, the HTTP client, the service contract, the health/readiness endpoints, the analysis-service-down failure mode, unparseable model answers, the projection model's features, training, serving, and fallbacks, and the retrieval corpus, indexing, evaluation, search filters, and fallbacks
 
 ---
 
@@ -246,6 +300,8 @@ analysis-service-down demo, and teardown.
 | `ANALYSIS_CONNECT_TIMEOUT` / `ANALYSIS_READ_TIMEOUT` | Core→analysis HTTP timeouts in seconds (default `3` / `90`) |
 | `ANALYSIS_DATABASE_URL` | PostgreSQL URL for the **analysis service's own** database |
 | `PROJECTION_MODEL_PATH` | Optional. Path to the projection model artifact (default `analysis_core/artifacts/ppr_projection.joblib`) |
+| `RAG_DATABASE_URL` | Optional. Postgres (with pgvector) holding the retrieval collection; unset disables retrieval. On the analysis service in `http` mode, on core in `inprocess` mode |
+| `FASTEMBED_CACHE_PATH` | Optional. Where the embedding model is cached (the Docker images bake it into `/app/.fastembed`) |
 
 ---
 
@@ -253,9 +309,10 @@ analysis-service-down demo, and teardown.
 
 ```bash
 pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
-pytest                          # all 242 (core + analysis service)
-pytest tests/                   # just the core app (179)
-pytest analysis_service/tests/  # just the analysis service (63)
+pytest                          # all 274 (core + analysis service)
+pytest tests/                   # just the core app (209)
+pytest analysis_service/tests/  # just the analysis service (65)
+TEST_PGVECTOR_URL=postgresql://... pytest tests/test_rag_pgvector.py   # live pgvector test (skipped otherwise)
 ```
 
 `pytest.ini` sets `pythonpath`, so no `PYTHONPATH=` prefix is needed.
@@ -263,7 +320,7 @@ pytest analysis_service/tests/  # just the analysis service (63)
 ### Coverage
 
 **98% line coverage** across `app`, `analysis_core`, `analysis_service`, and `ml`
-(1,084 statements, 23 missed; measured November 2026). `.coveragerc` defines the
+(1,398 statements, 26 missed; measured November 2026). `.coveragerc` defines the
 measured sources and excludes the tests and entry points.
 
 ```bash
@@ -317,6 +374,14 @@ Deploy both from this repo:
 Keep the analysis service on private networking — only the core app should reach
 it. The Stripe webhook still points at the **core** service.
 
+### Retrieval on Render
+
+Set `RAG_DATABASE_URL` on whichever service runs the analysis (core in monolith mode, analysis in
+`http` mode) to a Render Postgres that has the `vector` extension available, and run
+`python -m ml.rag.index` against it once. Without Docker, fastembed downloads the embedding model
+(about 130 MB) on the first retrieval after each deploy unless `FASTEMBED_CACHE_PATH` points at a
+persistent disk.
+
 ---
 
 ## Project structure
@@ -337,13 +402,15 @@ fantasy-draft-consultant/
 │   ├── anthropic_client.py         # the Claude agent (web_search, retry, prompt hardening)
 │   ├── contract.py                 # wire schemas + HMAC actor-token helpers
 │   ├── projection.py               # serves the PPR projection model (lookup, fallbacks)
+│   ├── retrieval.py                # RAG: fastembed + LangChain PGVector injury-history search
 │   └── artifacts/ppr_projection.joblib  # trained model + latest-season features
 │
 ├── ml/                             # Offline training (not deployed)
 │   ├── download.py                 # nflverse CSVs -> ml/data/raw/ (gitignored)
 │   ├── features.py                 # feature engineering (no future-season leakage)
 │   ├── train.py                    # season-based split, model selection, export
-│   └── reports/                    # REPORT.md + metrics.json from the last training run
+│   ├── rag/                        # retrieval corpus: documents.py, index.py, evaluate.py
+│   └── reports/                    # REPORT.md, RAG_REPORT.md + their metrics JSON
 │
 ├── app/                            # Core service
 │   ├── __init__.py                 # app factory; selects the analysis client

@@ -1,4 +1,4 @@
-"""Download the nflverse files the model trains on.
+"""Download the nflverse files the model trains on and retrieval indexes.
 
     python -m ml.download                     # 2012 .. last completed season
     python -m ml.download --first 2015 --last 2025
@@ -23,6 +23,14 @@ def stats_url(season: int) -> str:
     return f"{BASE}/stats_player/stats_player_reg_{season}.csv"
 
 
+def injuries_url(season: int) -> str:
+    return f"{BASE}/injuries/injuries_{season}.csv"
+
+
+def snap_counts_url(season: int) -> str:
+    return f"{BASE}/snap_counts/snap_counts_{season}.csv"
+
+
 PLAYERS_URL = f"{BASE}/players/players.csv"
 
 
@@ -44,7 +52,10 @@ def main(argv=None) -> None:
 
     for season in range(args.first, args.last + 1):
         fetch(stats_url(season), args.out / f"stats_player_reg_{season}.csv")
-        print(f"stats {season}")
+        # Retrieval corpus (ml/rag): weekly injury reports and snap counts.
+        fetch(injuries_url(season), args.out / f"injuries_{season}.csv")
+        fetch(snap_counts_url(season), args.out / f"snap_counts_{season}.csv")
+        print(f"stats, injuries, snap counts {season}")
     fetch(PLAYERS_URL, args.out / "players.csv")
     print("players")
 

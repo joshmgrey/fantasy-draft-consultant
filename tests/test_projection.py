@@ -239,7 +239,7 @@ def test_inprocess_client_passes_projection_and_returns_it(model_path, configure
     model_path()
     seen = {}
 
-    def fake(name, projection=None):
+    def fake(name, projection=None, **_):
         seen["projection"] = projection
         return CLEAN
 
@@ -253,7 +253,7 @@ def test_inprocess_client_passes_projection_and_returns_it(model_path, configure
 
 
 def test_inprocess_client_without_projection(configured, monkeypatch):
-    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name, projection=None: CLEAN)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name, projection=None, **_: CLEAN)
     verdict = InProcessAnalysisClient().analyze(
         player_name="Kenneth Walker III", actor=Actor(user_id="1")
     )
