@@ -237,7 +237,14 @@ export class AppStack extends Stack {
       },
     });
     const db = new rds.DatabaseInstance(this, 'Database', {
-      engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
+      // Same major version as the Render database being migrated (18), so
+      // pg_dump/pg_restore run 18 -> 18. Minor versions follow
+      // autoMinorVersionUpgrade; a later major upgrade needs
+      // allowMajorVersionUpgrade, which CloudFormation requires to change it.
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.of('18.6', '18'),
+      }),
+      allowMajorVersionUpgrade: true,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -586,7 +593,7 @@ export class AppStack extends Stack {
     });
     migrateTask.addContainer('migrate', {
       image: ecs.ContainerImage.fromRegistry(
-        props.migrateImage ?? 'public.ecr.aws/docker/library/postgres:16-alpine',
+        props.migrateImage ?? 'public.ecr.aws/docker/library/postgres:18-alpine',
       ),
       entryPoint: ['sh', '-c'],
       command: [MIGRATE_SCRIPT],

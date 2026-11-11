@@ -104,12 +104,13 @@ describe('network', () => {
 describe('database', () => {
   const template = synth();
 
-  test('one private, encrypted Postgres 16 instance', () => {
+  test('one private, encrypted Postgres 18 instance', () => {
     template.resourceCountIs('AWS::RDS::DBInstance', 1);
     template.hasResource('AWS::RDS::DBInstance', {
       Properties: Match.objectLike({
         Engine: 'postgres',
-        EngineVersion: Match.stringLikeRegexp('^16'),
+        EngineVersion: Match.stringLikeRegexp('^18'),
+        AllowMajorVersionUpgrade: true,
         DBInstanceClass: 'db.t4g.micro',
         DBName: 'core',
         PubliclyAccessible: false,
