@@ -10,10 +10,19 @@
 #
 # Until AWS_DEPLOY_ROLE_ARN and AWS_REGION are set the job is skipped, so
 # pushes to main keep working while the app still runs on Render.
+#
+# Continuous delivery: runs after the CI workflow finishes on main, and only
+# deploys if CI passed. workflow_run executes with this repo's permissions
+# (including the OIDC deploy role) even when CI was triggered by a fork's
+# pull request whose branch is named main, so the job also requires that the
+# CI run came from a push to this repository. Manual runs (workflow_dispatch)
+# deploy main as-is.
 name: Deploy to AWS
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -29,14 +38,22 @@ concurrency:
 
 jobs:
   deploy:
-    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != ''
+    if: >-
+      vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
-      IMAGE_TAG: ${{ github.sha }}
+      # The commit CI tested (workflow_run), or main's tip for manual runs.
+      IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:

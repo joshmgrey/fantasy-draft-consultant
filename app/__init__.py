@@ -23,6 +23,12 @@ def create_app(config=None):
     app.config["ANALYSIS_TOKEN_SECRET"] = os.environ.get("ANALYSIS_TOKEN_SECRET", "")
     app.config["ANALYSIS_CONNECT_TIMEOUT"] = os.environ.get("ANALYSIS_CONNECT_TIMEOUT", "3")
     app.config["ANALYSIS_READ_TIMEOUT"] = os.environ.get("ANALYSIS_READ_TIMEOUT", "90")
+    # Absolute site URL for link previews (og:url, og:image). Crawlers need
+    # absolute https URLs, and behind the load balancer the request itself
+    # arrives as plain http, so this isn't derived from the request.
+    app.config["PUBLIC_URL"] = os.environ.get(
+        "PUBLIC_URL", "https://fantasy-football-draft-consultant.com"
+    )
 
     if config:
         app.config.update(config)
@@ -45,6 +51,23 @@ def create_app(config=None):
             jsonify(error="Too many requests. Please wait a moment and try again."),
             429,
         )
+
+    @app.context_processor
+    def social_meta():
+        url = app.config["PUBLIC_URL"].rstrip("/")
+        return {"social": {
+            "url": url,
+            "site_name": "PPR Draft Consultant",
+            "title": "PPR Fantasy Football Draft Consultant",
+            "description": (
+                "Type a player's name and get a 1-10 risk score and a Draft or Pass "
+                "verdict in seconds, from AI research on projections, ADP, injuries, "
+                "and news."
+            ),
+            "image": f"{url}/static/og-image.png",
+            "image_alt": "PPR Fantasy Football Draft Consultant: a sample Draft verdict "
+                         "with a 3/10 risk score",
+        }}
 
     from .identity.infrastructure.repository import get_by_id
 
