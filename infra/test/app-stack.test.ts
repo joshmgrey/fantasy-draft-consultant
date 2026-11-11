@@ -145,6 +145,43 @@ describe('secrets', () => {
     });
   });
 
+  test('every generated secret can satisfy its own character rules', () => {
+    // Secrets Manager requires one character of each type that isn't excluded
+    // (RequireEachIncludedType defaults to true). A type left allowed while
+    // ExcludeCharacters removes all of its characters makes generation fail
+    // at deploy time, so check every generated secret in the template.
+    const classes: [string, string][] = [
+      ['ExcludeLowercase', 'abcdefghijklmnopqrstuvwxyz'],
+      ['ExcludeUppercase', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'],
+      ['ExcludeNumbers', '0123456789'],
+      ['ExcludePunctuation', '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'],
+    ];
+    const secrets = template.findResources('AWS::SecretsManager::Secret');
+    const generated = Object.values(secrets)
+      .map((r) => r.Properties?.GenerateSecretString)
+      .filter((g) => g !== undefined);
+    expect(generated.length).toBeGreaterThanOrEqual(3);
+    for (const g of generated) {
+      if (g.RequireEachIncludedType === false) continue;
+      const excluded = new Set<string>(g.ExcludeCharacters ?? '');
+      for (const [flag, chars] of classes) {
+        if (g[flag]) continue;
+        const left = [...chars].filter((ch) => !excluded.has(ch));
+        expect({ flag, left: left.length > 0 }).toEqual({ flag, left: true });
+      }
+    }
+  });
+
+  test('the database master password is alphanumeric', () => {
+    template.hasResourceProperties('AWS::SecretsManager::Secret', {
+      GenerateSecretString: Match.objectLike({
+        GenerateStringKey: 'password',
+        SecretStringTemplate: JSON.stringify({ username: 'fdcadmin' }),
+        ExcludePunctuation: true,
+      }),
+    });
+  });
+
   test('sensitive values are ECS secrets, never plain environment variables', () => {
     for (const container of Object.values(containers(template))) {
       const plain = (container.Environment ?? []).map((e) => e.Name);

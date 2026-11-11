@@ -49,12 +49,6 @@ export interface AppStackProps extends StackProps {
   readonly migrateImage?: string;
 }
 
-/**
- * Every punctuation character. The generated DB password is spliced into a
- * postgresql:// URL by a shell one-liner, so keep it alphanumeric: nothing to
- * URL-encode, nothing for the shell to interpret.
- */
-const PUNCTUATION = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ ';
 
 /** A health check run inside the container. The images have python, not curl. */
 const HEALTHZ_CHECK: ecs.HealthCheck = {
@@ -225,15 +219,30 @@ export class AppStack extends Stack {
     // are shared and either can be moved to its own instance later with a
     // pg_dump. But at this traffic a second instance would only double the
     // cost (~$15/month each with storage) and the maintenance windows.
+    // The master password is spliced into a postgresql:// URL by a shell
+    // one-liner, so keep it alphanumeric: nothing to URL-encode, nothing for
+    // the shell to interpret. Built explicitly because
+    // Credentials.fromGeneratedSecret only takes excludeCharacters: listing
+    // every punctuation character there leaves punctuation an *allowed* type
+    // with no characters left, and Secrets Manager (which requires one of each
+    // allowed type by default) can't generate the password. excludePunctuation
+    // removes the type itself.
+    const dbMasterSecret = new secretsmanager.Secret(this, 'DatabaseMasterSecret', {
+      description: 'RDS master credentials (username + generated alphanumeric password)',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'fdcadmin' }),
+        generateStringKey: 'password',
+        passwordLength: 30,
+        excludePunctuation: true,
+      },
+    });
     const db = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       securityGroups: [dbSg],
-      credentials: rds.Credentials.fromGeneratedSecret('fdcadmin', {
-        excludeCharacters: PUNCTUATION,
-      }),
+      credentials: rds.Credentials.fromSecret(dbMasterSecret),
       databaseName: CORE_DB_NAME,
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
