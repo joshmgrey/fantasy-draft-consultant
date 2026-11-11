@@ -15,8 +15,9 @@
 # deploys if CI passed. workflow_run executes with this repo's permissions
 # (including the OIDC deploy role) even when CI was triggered by a fork's
 # pull request whose branch is named main, so the job also requires that the
-# CI run came from a push to this repository. Manual runs (workflow_dispatch)
-# deploy main as-is.
+# CI run came from a push to this repository or a manual CI run on main
+# (workflow_dispatch needs write access). Manual runs of this workflow
+# (workflow_dispatch) deploy main as-is.
 name: Deploy to AWS
 
 on:
@@ -42,7 +43,8 @@ jobs:
       vars.AWS_DEPLOY_ROLE_ARN != '' && vars.AWS_REGION != '' &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.event == 'push' ||
+         github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 60

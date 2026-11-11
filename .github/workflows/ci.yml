@@ -10,11 +10,14 @@
 name: CI
 
 # Pull requests (every update) and main. Pushes to other branches get CI
-# once a PR is open, so PR branches aren't tested twice.
+# once a PR is open, so PR branches aren't tested twice. workflow_dispatch
+# lets a run be started by hand from the Actions tab (e.g. after a run gets
+# stuck), without a new commit; a manual run on main also triggers the deploy.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -82,7 +85,7 @@ jobs:
   # Publishes badge JSON for the README. Main only, after the tests pass.
   badges:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
