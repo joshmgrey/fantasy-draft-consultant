@@ -501,11 +501,19 @@ export class AppStack extends Stack {
       });
     }
 
-    const targetProps: elbv2.AddApplicationTargetsProps = {
+    // Defined on its own (not via listener.addTargets) so its logical ID is
+    // the same with and without a certificate: adding HTTPS later must not
+    // replace the target group the core service is registered with.
+    const coreTargetGroup = new elbv2.ApplicationTargetGroup(this, 'CoreTargetGroup', {
+      vpc,
       port: CONTAINER_PORT,
       protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
       targets: [coreService.loadBalancerTarget({ containerName: 'core', containerPort: CONTAINER_PORT })],
-      deregistrationDelay: Duration.seconds(30),
+      // Let in-flight /analyze requests (up to ANALYSIS_READ_TIMEOUT=100s)
+      // finish on the old task during a rolling deploy instead of being cut
+      // off; matches the ALB idle timeout.
+      deregistrationDelay: requestTimeout,
       healthCheck: {
         path: '/healthz',
         healthyHttpCodes: '200',
@@ -514,22 +522,31 @@ export class AppStack extends Stack {
         healthyThresholdCount: 2,
         unhealthyThresholdCount: 3,
       },
-    };
+    });
+
+    // One port-80 listener with a fixed logical ID in both modes. Without a
+    // certificate it serves the app (first run, on the ALB's DNS name); with
+    // one it redirects to HTTPS. Switching modes is then an in-place update
+    // of this listener's default action. Two differently-named listeners
+    // would make CloudFormation create the new port-80 listener before
+    // deleting the old one, which the ALB rejects.
+    alb.addListener('Http', {
+      port: 80,
+      open: false,
+      defaultAction: certificate
+        ? elbv2.ListenerAction.redirect({ protocol: 'HTTPS', port: '443', permanent: true })
+        : elbv2.ListenerAction.forward([coreTargetGroup]),
+    });
 
     if (certificate) {
-      const httpsListener = alb.addListener('Https', {
+      alb.addListener('Https', {
         port: 443,
         protocol: elbv2.ApplicationProtocol.HTTPS,
         certificates: [certificate],
         sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
         open: false,
+        defaultAction: elbv2.ListenerAction.forward([coreTargetGroup]),
       });
-      httpsListener.addTargets('Core', targetProps);
-      alb.addRedirect({ sourcePort: 80, targetPort: 443, open: false });
-    } else {
-      // No certificate yet: plain HTTP so the stack can come up and be tested
-      // on the ALB's DNS name before the domain moves over.
-      alb.addListener('Http', { port: 80, open: false }).addTargets('Core', targetProps);
     }
 
     if (zone && props.domainName) {

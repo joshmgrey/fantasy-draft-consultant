@@ -288,6 +288,29 @@ describe('load balancer', () => {
     });
   });
 
+  test('adding a certificate updates the port-80 listener and target group in place', () => {
+    const port80Id = (t: Template) =>
+      Object.entries(t.findResources('AWS::ElasticLoadBalancingV2::Listener', { Properties: { Port: 80 } })).map(
+        ([id]) => id,
+      );
+    const targetGroupIds = (t: Template) => Object.keys(t.findResources('AWS::ElasticLoadBalancingV2::TargetGroup'));
+
+    const before = synth();
+    const after = synth({
+      domainName: 'draft.example.com',
+      certificateArn: 'arn:aws:acm:us-east-1:111111111111:certificate/abc',
+    });
+    expect(port80Id(before)).toHaveLength(1);
+    expect(port80Id(after)).toEqual(port80Id(before));
+    expect(targetGroupIds(after)).toEqual(targetGroupIds(before));
+  });
+
+  test('deregistration delay lets in-flight /analyze requests finish', () => {
+    synth().hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+      TargetGroupAttributes: Match.arrayWith([{ Key: 'deregistration_delay.timeout_seconds', Value: '120' }]),
+    });
+  });
+
   test('with an existing certificate ARN: no new certificate', () => {
     const template = synth({
       domainName: 'draft.example.com',
