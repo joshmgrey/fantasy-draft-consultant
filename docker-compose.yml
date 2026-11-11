@@ -24,11 +24,16 @@ services:
       retries: 10
 
   analysis-db:
-    image: postgres:16-alpine
+    # Postgres 16 with the pgvector extension, for the retrieval store.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: analysis
       POSTGRES_PASSWORD: analysis
       POSTGRES_DB: analysis
+    # Published on localhost only, so `python -m ml.rag.index` can load the
+    # retrieval collection from the host.
+    ports:
+      - "127.0.0.1:5433:5432"
     volumes:
       - analysis-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -46,6 +51,9 @@ services:
       ANALYSIS_TOKEN_SECRET: ${ANALYSIS_TOKEN_SECRET:?set ANALYSIS_TOKEN_SECRET in .env}
       # The service's own database — no tables or models shared with core-db.
       ANALYSIS_DATABASE_URL: postgresql://analysis:analysis@analysis-db:5432/analysis
+      # Retrieval (RAG) reads the pgvector collection in the same database.
+      # Fill it once with: python -m ml.rag.index (see README).
+      RAG_DATABASE_URL: postgresql://analysis:analysis@analysis-db:5432/analysis
     depends_on:
       analysis-db:
         condition: service_healthy

@@ -1,0 +1,63 @@
+{
+  "generated_on": "2026-11-10",
+  "embedding_model": "BAAI/bge-small-en-v1.5",
+  "documents": 8055,
+  "seasons": [
+    2012,
+    2025
+  ],
+  "comparables": {
+    "k": 5,
+    "test_target_season": 2025,
+    "mae": {
+      "overall": {
+        "n": 371,
+        "no_change": 2.685,
+        "random_comparables": 2.669,
+        "position_average_change": 2.646,
+        "similar_comparables": 2.837
+      },
+      "QB": {
+        "n": 44,
+        "no_change": 4.128,
+        "random_comparables": 4.096,
+        "position_average_change": 4.098,
+        "similar_comparables": 4.481
+      },
+      "RB": {
+        "n": 88,
+        "no_change": 2.75,
+        "random_comparables": 2.767,
+        "position_average_change": 2.711,
+        "similar_comparables": 3.044
+      },
+      "WR": {
+        "n": 152,
+        "no_change": 2.592,
+        "random_comparables": 2.551,
+        "position_average_change": 2.527,
+        "similar_comparables": 2.626
+      },
+      "TE": {
+        "n": 87,
+        "no_change": 2.051,
+        "random_comparables": 2.055,
+        "position_average_change": 2.053,
+        "similar_comparables": 2.164
+      },
+      "relevant": {
+        "n": 124,
+        "no_change": 3.562,
+        "random_comparables": 3.473,
+        "position_average_change": 3.469,
+        "similar_comparables": 3.685
+      }
+    }
+  },
+  "injury_ranking": {
+    "n": 232,
+    "hit_at_1/injury_query": 0.858,
+    "hit_at_1/most_recent_first": 0.379,
+    "hit_at_1/random_order": 0.391
+  }
+}
