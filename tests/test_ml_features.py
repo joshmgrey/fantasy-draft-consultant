@@ -195,7 +195,11 @@ def test_download_fetches_each_season_and_players(tmp_path, monkeypatch):
     download.main(["--first", "2020", "--last", "2021", "--out", str(tmp_path)])
     assert fetched == [
         (download.stats_url(2020), "stats_player_reg_2020.csv"),
+        (download.injuries_url(2020), "injuries_2020.csv"),
+        (download.snap_counts_url(2020), "snap_counts_2020.csv"),
         (download.stats_url(2021), "stats_player_reg_2021.csv"),
+        (download.injuries_url(2021), "injuries_2021.csv"),
+        (download.snap_counts_url(2021), "snap_counts_2021.csv"),
         (download.PLAYERS_URL, "players.csv"),
     ]
 

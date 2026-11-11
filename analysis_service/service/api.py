@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from analysis_core import anthropic_client
 from analysis_core import projection as projection_model
+from analysis_core import retrieval
 from analysis_core.contract import (
     ANALYZE_PATH,
     HEALTH_PATH,
@@ -85,8 +86,11 @@ def create_analysis():
 
     started = time.monotonic()
     projection = projection_model.project_player(name)
+    context = retrieval.retrieve_context(name)
     try:
-        raw_text = anthropic_client.analyze_player(name, projection=projection)
+        raw_text = anthropic_client.analyze_player(
+            name, retrieved_context=context, projection=projection
+        )
     except anthropic.RateLimitError:
         return error_response(
             ErrorCode.UPSTREAM_RATE_LIMITED,

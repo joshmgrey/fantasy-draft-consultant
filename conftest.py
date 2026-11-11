@@ -2,7 +2,7 @@
 
 import pytest
 
-from analysis_core import projection
+from analysis_core import projection, retrieval
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +17,10 @@ def _no_projection_model(monkeypatch, tmp_path):
     # Any MLflow tracking a test triggers goes to a throwaway store, never
     # ml/mlflow.db.
     monkeypatch.setenv("MLFLOW_TRACKING_URI", f"sqlite:///{(tmp_path / 'mlflow.db').as_posix()}")
+    # No retrieval store either: tests that exercise RAG build their own.
+    monkeypatch.delenv(retrieval.DATABASE_ENV, raising=False)
     projection.reset_projector()
+    retrieval.reset_retriever()
     yield
     projection.reset_projector()
+    retrieval.reset_retriever()
