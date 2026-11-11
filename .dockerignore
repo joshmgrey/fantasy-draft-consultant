@@ -16,3 +16,9 @@ docs
 
 # CDK app (its node_modules alone is hundreds of MB of build context)
 infra
+
+# ml/ outputs (the rag-indexer image copies ml/, but never local data or runs)
+ml/data
+ml/mlflow.db
+ml/mlartifacts
+mlruns

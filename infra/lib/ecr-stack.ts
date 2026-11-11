@@ -1,16 +1,17 @@
 import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
-import { ANALYSIS_REPO_NAME, CORE_REPO_NAME } from './config';
+import { ANALYSIS_REPO_NAME, CORE_REPO_NAME, RAG_INDEXER_REPO_NAME } from './config';
 
 /**
- * The two image repositories, in their own stack so CI can create them before
+ * The image repositories, in their own stack so CI can create them before
  * it pushes the first images and before the app stack (whose task definitions
  * point at those images) is deployed.
  */
 export class EcrStack extends Stack {
   readonly coreRepo: ecr.Repository;
   readonly analysisRepo: ecr.Repository;
+  readonly ragIndexerRepo: ecr.Repository;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -29,5 +30,6 @@ export class EcrStack extends Stack {
 
     this.coreRepo = repo('CoreRepo', CORE_REPO_NAME);
     this.analysisRepo = repo('AnalysisRepo', ANALYSIS_REPO_NAME);
+    this.ragIndexerRepo = repo('RagIndexerRepo', RAG_INDEXER_REPO_NAME);
   }
 }

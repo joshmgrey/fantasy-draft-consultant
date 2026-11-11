@@ -1,7 +1,7 @@
 import { CfnOutput, Duration, Stack, StackProps } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
-import { ANALYSIS_REPO_NAME, CORE_REPO_NAME } from './config';
+import { ANALYSIS_REPO_NAME, CORE_REPO_NAME, RAG_INDEXER_REPO_NAME } from './config';
 
 export interface GithubOidcStackProps extends StackProps {
   /** `owner/name` of the GitHub repository allowed to assume the role. */
@@ -20,7 +20,7 @@ export interface GithubOidcStackProps extends StackProps {
  * repo. Deployed once by hand during bootstrap (see infra/README.md); its
  * ARN goes into the AWS_DEPLOY_ROLE_ARN repository variable.
  *
- * The role can only push to the two ECR repositories and assume the CDK
+ * The role can only push to the app's ECR repositories and assume the CDK
  * bootstrap roles. CloudFormation changes run as the bootstrap deploy role,
  * not as this one.
  */
@@ -75,7 +75,7 @@ export class GithubOidcStack extends Stack {
           'ecr:PutImage',
           'ecr:UploadLayerPart',
         ],
-        resources: [CORE_REPO_NAME, ANALYSIS_REPO_NAME].map(
+        resources: [CORE_REPO_NAME, ANALYSIS_REPO_NAME, RAG_INDEXER_REPO_NAME].map(
           (name) => `arn:${this.partition}:ecr:${this.region}:${this.account}:repository/${name}`,
         ),
       }),

@@ -6,6 +6,8 @@
 /** ECR repository names. The deploy workflow pushes to these. */
 export const CORE_REPO_NAME = 'fdc/core';
 export const ANALYSIS_REPO_NAME = 'fdc/analysis';
+/** One-off RAG indexer image (deploy/rag-indexer/Dockerfile). */
+export const RAG_INDEXER_REPO_NAME = 'fdc/rag-indexer';
 
 /** Both images listen here (see the Dockerfiles' gunicorn --bind). */
 export const CONTAINER_PORT = 8000;

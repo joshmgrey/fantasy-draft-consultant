@@ -1,4 +1,4 @@
-# Builds both images, pushes them to ECR and deploys the CDK app in infra/.
+# Builds the images, pushes them to ECR and deploys the CDK app in infra/.
 #
 # Authenticates with GitHub OIDC: no AWS keys are stored in the repo. Needs
 # these repository *variables* (Settings > Secrets and variables > Actions >
@@ -96,6 +96,23 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/fdc/analysis:latest
           cache-from: type=gha,scope=analysis
           cache-to: type=gha,mode=max,scope=analysis
+
+      # Not a service: run by hand with `aws ecs run-task` (infra/README.md,
+      # "Building the RAG index"). Built every time so it always embeds with
+      # the same code and model as the analysis image of the same SHA.
+      - name: Build and push RAG indexer image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/rag-indexer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/fdc/rag-indexer:${{ env.IMAGE_TAG }}
+            ${{ steps.ecr.outputs.registry }}/fdc/rag-indexer:latest
+          cache-from: type=gha,scope=rag-indexer
+          cache-to: type=gha,mode=max,scope=rag-indexer
 
       # Waits for both ECS services to stabilize; a failing deployment trips
       # the circuit breaker, ECS rolls back, and this step fails.

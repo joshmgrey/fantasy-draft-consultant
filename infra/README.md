@@ -32,8 +32,8 @@ meet AWS.
 | Stack | What | Deployed by |
 |---|---|---|
 | `FdcGithubOidc` | GitHub OIDC provider + the role Actions assumes | you, once |
-| `FdcEcr` | ECR repos `fdc/core`, `fdc/analysis` | the workflow (before pushing images) |
-| `FdcApp` | VPC, ALB, ECS cluster + 2 services, RDS, Secrets Manager, migration task | the workflow |
+| `FdcEcr` | ECR repos `fdc/core`, `fdc/analysis`, `fdc/rag-indexer` | the workflow (before pushing images) |
+| `FdcApp` | VPC, ALB, ECS cluster + 2 services, RDS, Secrets Manager, migration and RAG index tasks | the workflow |
 
 The source is in [`lib/`](lib); names shared with the workflow are in
 [`lib/config.ts`](lib/config.ts).
@@ -142,8 +142,8 @@ npx cdk synth --quiet
    Without a certificate the ALB serves plain HTTP on port 80.
 
 5. **First deploy.** Actions → *Deploy to AWS* → *Run workflow* (or push to
-   `main`). It tests the stacks, deploys `FdcEcr`, builds and pushes both
-   images tagged with the commit SHA and `latest`, then deploys `FdcApp`. The
+   `main`). It tests the stacks, deploys `FdcEcr`, builds and pushes the
+   images (core, analysis, rag-indexer) tagged with the commit SHA and `latest`, then deploys `FdcApp`. The
    first `FdcApp` deploy takes ~15–20 minutes, mostly RDS.
 
    The services come up healthy with placeholder secrets, but `/analyze` and
@@ -229,10 +229,40 @@ VPC (RDS has no public endpoint). The script is `MIGRATE_SCRIPT` in
 7. **Clean up.** Overwrite `fdc/render-migration` with placeholders and remove
    the Render access-control rule.
 
+## Building the RAG index
+
+The analysis service's retrieval reads the `player_seasons` pgvector
+collection in the `analysis` database (`RAG_DATABASE_URL`). Retrieval is
+optional, so the app works without the collection, but it adds nothing until
+the collection is built. The index isn't migrated from Render: it's rebuilt
+from nflverse data.
+
+`FdcApp` has a task definition for this, separate from the services. It runs
+the `fdc/rag-indexer` image ([`deploy/rag-indexer/Dockerfile`](../deploy/rag-indexer/Dockerfile):
+the analysis dependencies and embedding model, plus pandas and `ml/`). The
+task runs `python -m ml.download && python -m ml.rag.index` against the
+analysis database. The rebuild is blue/green (staging collection, then one
+swap transaction), so the running service keeps answering throughout and
+picks up the new collection without a restart.
+
+Run it after the first deploy, and again **each May** after the season rolls
+over (values from the `FdcApp` stack outputs):
+
+```bash
+aws ecs run-task --cluster CLUSTER --launch-type FARGATE --task-definition RAG_INDEX_TASK_DEFINITION_ARN --network-configuration "awsvpcConfiguration={subnets=[SUBNET_1,SUBNET_2],securityGroups=[ANALYSIS_SG],assignPublicIp=ENABLED}"
+```
+
+It runs with the analysis security group (database access plus HTTPS out to
+GitHub for the downloads). Follow it in CloudWatch Logs under stream prefix
+`rag-index`; it ends with `indexed N player-season documents`. At 2 vCPU /
+4 GB it costs a few cents per run. The task definition points at the image
+of the last deploy, so the index is always built with the same code and
+embedding model as the running analysis service.
+
 ## Cutover
 
-1. Bootstrap, deploy, fill secrets and run a test migration ahead of time;
-   check the app on the ALB DNS name (`AlbDnsName` output).
+1. Bootstrap, deploy, fill secrets, build the RAG index and run a test
+   migration ahead of time; check the app on the ALB DNS name (`AlbDnsName` output).
 2. Lower the TTL on the app's DNS record (e.g. to 60s) a day before.
 3. On the day: suspend Render, run the migration again (fresh data), roll the
    services.

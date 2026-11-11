@@ -6,7 +6,7 @@ import { GithubOidcStack } from '../lib/github-oidc-stack';
 describe('EcrStack', () => {
   const template = Template.fromStack(new EcrStack(new App(), 'TestEcr'));
 
-  test.each(['fdc/core', 'fdc/analysis'])('%s repo scans on push and is retained', (name) => {
+  test.each(['fdc/core', 'fdc/analysis', 'fdc/rag-indexer'])('%s repo scans on push and is retained', (name) => {
     template.hasResource('AWS::ECR::Repository', {
       Properties: Match.objectLike({
         RepositoryName: name,
@@ -68,7 +68,7 @@ describe('GithubOidcStack', () => {
     });
   });
 
-  test('can assume the CDK bootstrap roles and push to the two repos, nothing broader', () => {
+  test('can assume the CDK bootstrap roles and push to the app repos, nothing broader', () => {
     const template = synth();
     const policies = Object.values(template.findResources('AWS::IAM::Policy'));
     const statements = policies.flatMap((p) => p.Properties.PolicyDocument.Statement);
@@ -80,5 +80,6 @@ describe('GithubOidcStack', () => {
     expect(json).toContain(':role/cdk-*');
     expect(json).toContain('repository/fdc/core');
     expect(json).toContain('repository/fdc/analysis');
+    expect(json).toContain('repository/fdc/rag-indexer');
   });
 });

@@ -28,6 +28,7 @@ import {
   CORE_GUNICORN,
   CORE_REPO_NAME,
   PLACEHOLDER,
+  RAG_INDEXER_REPO_NAME,
   SECRET_NAMES,
 } from './config';
 
@@ -142,6 +143,9 @@ case "$RENDER_ANALYSIS_DATABASE_URL" in
 esac
 echo "migration complete"
 `.trim();
+
+/** What the RAG index task runs (also the indexer image's CMD). */
+export const RAG_INDEX_COMMAND = 'python -m ml.download && python -m ml.rag.index';
 
 export class AppStack extends Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
@@ -586,6 +590,37 @@ export class AppStack extends Stack {
       logging: logsFor('migrate'),
     });
 
+    // ------------------------------------------------------- RAG index (manual)
+    // Builds the player_seasons pgvector collection in the analysis database
+    // that analysis reads through RAG_DATABASE_URL. Run once after the first
+    // deploy and again each May after the season rolls over; the rebuild is
+    // blue/green, so the running service keeps answering throughout. It runs
+    // with the analysis security group: same database access, HTTPS out (for
+    // the nflverse downloads from GitHub), no inbound from the internet.
+    const ragIndexTask = new ecs.FargateTaskDefinition(this, 'RagIndexTask', {
+      // Embedding several thousand documents on CPU: more cores, a faster run.
+      // It's billed only for the minutes it runs.
+      cpu: 2048,
+      memoryLimitMiB: 4096,
+      runtimePlatform,
+    });
+    ragIndexTask.addContainer('rag-index', {
+      image: ecs.ContainerImage.fromEcrRepository(
+        ecr.Repository.fromRepositoryName(this, 'RagIndexerRepo', RAG_INDEXER_REPO_NAME),
+        props.imageTag,
+      ),
+      entryPoint: ['sh', '-c'],
+      command: [
+        withDatabaseUrls(
+          { RAG_DATABASE_URL: ANALYSIS_DB_NAME },
+          `sh -c '${RAG_INDEX_COMMAND}'`,
+        ),
+      ],
+      environment: { ...dbEnv },
+      secrets: dbSecrets,
+      logging: logsFor('rag-index'),
+    });
+
     // ---------------------------------------------------------------- outputs
     const scheme = certificate ? 'https' : 'http';
     new CfnOutput(this, 'AppUrl', {
@@ -597,6 +632,8 @@ export class AppStack extends Stack {
     new CfnOutput(this, 'AnalysisServiceName', { value: analysisService.serviceName });
     new CfnOutput(this, 'MigrateTaskDefinitionArn', { value: migrateTask.taskDefinitionArn });
     new CfnOutput(this, 'MigrateSecurityGroupId', { value: migrateSg.securityGroupId });
+    new CfnOutput(this, 'RagIndexTaskDefinitionArn', { value: ragIndexTask.taskDefinitionArn });
+    new CfnOutput(this, 'AnalysisSecurityGroupId', { value: analysisSg.securityGroupId });
     new CfnOutput(this, 'PublicSubnetIds', {
       value: vpc.publicSubnets.map((s) => s.subnetId).join(','),
     });

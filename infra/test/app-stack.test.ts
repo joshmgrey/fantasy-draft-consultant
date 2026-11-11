@@ -1,6 +1,6 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { AppStack, AppStackProps, withDatabaseUrls } from '../lib/app-stack';
+import { AppStack, AppStackProps, RAG_INDEX_COMMAND, withDatabaseUrls } from '../lib/app-stack';
 
 const SENSITIVE_VARS = [
   'ANTHROPIC_API_KEY',
@@ -361,6 +361,27 @@ describe('migration task', () => {
     expect(script).toContain('pg_restore --clean --if-exists');
     expect(script).toMatch(/restore "\$RENDER_DATABASE_URL" core/);
     expect(script).toMatch(/restore "\$RENDER_ANALYSIS_DATABASE_URL" analysis/);
+  });
+});
+
+describe('RAG index task', () => {
+  const template = synth();
+  const c = containers(template);
+
+  test('downloads the data, then indexes into the analysis database', () => {
+    const cmd = c['rag-index'].Command![0];
+    expect(cmd).toMatch(/^export RAG_DATABASE_URL="postgresql:\/\/[^"]+\/analysis\?sslmode=require"; /);
+    // Both steps must run: a bare `exec a && b` would never reach b.
+    expect(cmd).toContain(`exec sh -c '${RAG_INDEX_COMMAND}'`);
+    expect(RAG_INDEX_COMMAND).toBe('python -m ml.download && python -m ml.rag.index');
+    expect(JSON.stringify(c['rag-index'].Image)).toContain('fdc/rag-indexer:abc123');
+    expect(secretNames(c['rag-index'])).toEqual(expect.arrayContaining(['DB_USERNAME', 'DB_PASSWORD']));
+  });
+
+  test('is a task definition only, not a service', () => {
+    const td = taskDefFor(template, 'rag-index');
+    expect(Number(td.Properties.Memory)).toBeGreaterThanOrEqual(2048);
+    template.resourceCountIs('AWS::ECS::Service', 2);
   });
 });
 
