@@ -367,6 +367,9 @@ and later.
 
 ## Deployment (Render)
 
+> Moving to AWS? [`infra/`](infra/README.md) has a CDK app (ECS Fargate, ALB,
+> RDS) with bootstrap, data-migration and cutover steps.
+
 ### Single service (monolith)
 
 1. Create a **Web Service** with start command `gunicorn run:app --bind 0.0.0.0:$PORT`
