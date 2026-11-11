@@ -178,5 +178,6 @@
     }
   },
   "test_mae_improvement_vs_baseline_pct": 10.9,
-  "sklearn_version": "1.9.1"
+  "sklearn_version": "1.9.1",
+  "mlflow_run_id": "da457fb7098e4c1b9f05cd3dde298166"
 }
