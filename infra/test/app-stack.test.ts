@@ -305,6 +305,28 @@ describe('load balancer', () => {
     expect(targetGroupIds(after)).toEqual(targetGroupIds(before));
   });
 
+  test('the HTTPS redirect and DNS record wait for the HTTPS listener', () => {
+    const template = synth({
+      domainName: 'draft.example.com',
+      hostedZoneId: 'Z123456ABCDEFG',
+      hostedZoneName: 'example.com',
+    });
+    const [httpsId] = Object.keys(
+      template.findResources('AWS::ElasticLoadBalancingV2::Listener', { Properties: { Port: 443 } }),
+    );
+    const [http] = Object.values(
+      template.findResources('AWS::ElasticLoadBalancingV2::Listener', { Properties: { Port: 80 } }),
+    );
+    const [alias] = Object.values(template.findResources('AWS::Route53::RecordSet', { Properties: { Type: 'A' } }));
+    expect(httpsId).toBeDefined();
+    expect(http.DependsOn).toContain(httpsId);
+    expect(alias.DependsOn).toContain(httpsId);
+    // ...and the HTTPS listener itself waits for the validated certificate.
+    const [certId] = Object.keys(template.findResources('AWS::CertificateManager::Certificate'));
+    const https = template.toJSON().Resources[httpsId];
+    expect(JSON.stringify(https.Properties.Certificates)).toContain(certId);
+  });
+
   test('deregistration delay lets in-flight /analyze requests finish', () => {
     synth().hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
       TargetGroupAttributes: Match.arrayWith([{ Key: 'deregistration_delay.timeout_seconds', Value: '120' }]),

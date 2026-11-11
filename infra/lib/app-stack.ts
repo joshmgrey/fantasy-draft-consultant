@@ -530,7 +530,7 @@ export class AppStack extends Stack {
     // of this listener's default action. Two differently-named listeners
     // would make CloudFormation create the new port-80 listener before
     // deleting the old one, which the ALB rejects.
-    alb.addListener('Http', {
+    const httpListener = alb.addListener('Http', {
       port: 80,
       open: false,
       defaultAction: certificate
@@ -538,23 +538,30 @@ export class AppStack extends Stack {
         : elbv2.ListenerAction.forward([coreTargetGroup]),
     });
 
-    if (certificate) {
-      alb.addListener('Https', {
-        port: 443,
-        protocol: elbv2.ApplicationProtocol.HTTPS,
-        certificates: [certificate],
-        sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
-        open: false,
-        defaultAction: elbv2.ListenerAction.forward([coreTargetGroup]),
-      });
-    }
+    const httpsListener = certificate
+      ? alb.addListener('Https', {
+          port: 443,
+          protocol: elbv2.ApplicationProtocol.HTTPS,
+          certificates: [certificate],
+          sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
+          open: false,
+          defaultAction: elbv2.ListenerAction.forward([coreTargetGroup]),
+        })
+      : undefined;
+
+    // The HTTPS listener references the certificate, so it waits for DNS
+    // validation. Make the HTTP->HTTPS redirect and the DNS record wait for
+    // the HTTPS listener in turn: otherwise either can go live while 443 has
+    // nothing behind it.
+    if (httpsListener) httpListener.node.addDependency(httpsListener);
 
     if (zone && props.domainName) {
-      new route53.ARecord(this, 'AliasRecord', {
+      const alias = new route53.ARecord(this, 'AliasRecord', {
         zone,
         recordName: props.domainName,
         target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(alb)),
       });
+      if (httpsListener) alias.node.addDependency(httpsListener);
     }
 
     // ------------------------------------------------------ migration (manual)
