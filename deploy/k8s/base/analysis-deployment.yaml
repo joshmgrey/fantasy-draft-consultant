@@ -87,10 +87,13 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
+          # Each of the 2 gunicorn workers loads the projection model and, on its
+          # first retrieval, the ONNX embedding model: measured ~460 MB resident
+          # per worker (~260 MB before the embedding model), so ~920 MB for two.
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 1Gi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 1536Mi

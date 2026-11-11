@@ -105,18 +105,20 @@ def as_langchain_embeddings(embeddings: _Embeddings):
 
 
 def open_store(url: str, embeddings: _Embeddings, *, create: bool = False,
-               pre_delete: bool = False):
+               pre_delete: bool = False, collection: str = COLLECTION):
     """LangChain ``PGVector`` store for the player-season collection.
 
     ``create=True`` (indexing only) creates the ``vector`` extension and
     tables; the services never do, so they can run as a non-owner role.
+    PGVector resolves the collection by name on every query, so a running
+    service picks up a re-index without a restart.
     """
     from langchain_postgres import PGVector
 
     return PGVector(
         embeddings=as_langchain_embeddings(embeddings),
         connection=sqlalchemy_url(url),
-        collection_name=COLLECTION,
+        collection_name=collection,
         embedding_length=EMBEDDING_DIM,
         use_jsonb=True,
         create_extension=create,

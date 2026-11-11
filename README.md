@@ -104,7 +104,7 @@ injury types, missed practices). Past seasons also note what happened the next s
 |---|---|
 | **Embeddings** | `BAAI/bge-small-en-v1.5` (Hugging Face) through fastembed: ONNX, no PyTorch. Queries use the model's retrieval instruction. |
 | **Vector store** | Postgres + **pgvector** via LangChain's `PGVector` (`langchain-postgres`), in the analysis database |
-| **Indexing** | `python -m ml.rag.index` embeds each season's profile and rebuilds the `player_seasons` collection |
+| **Indexing** | `python -m ml.rag.index` embeds each season's profile into a staging collection, then swaps it in for `player_seasons` in one transaction (blue/green), so running services keep answering and pick up the new data without a restart |
 | **Query** | The injury-focused query is embedded live, then cosine search runs filtered to the player (metadata filter), keeping the 3 most injury-relevant seasons, shown newest first |
 
 **Evaluation** ([`ml/reports/RAG_REPORT.md`](ml/reports/RAG_REPORT.md)). Among 232 players with
@@ -121,6 +121,10 @@ don't capture numeric similarity well, so comparables are evaluated but not serv
 
 **Fallbacks.** Without `RAG_DATABASE_URL`, without the packages, or on any database or model
 error, retrieval returns nothing and the analysis runs as before.
+
+**Memory.** Each gunicorn worker is about 260 MB with the projection model and about 460 MB once the
+embedding model has loaded (measured), so the k8s analysis container requests 1 Gi and is
+limited to 1.5 Gi for its two workers.
 
 ```bash
 python -m ml.download                       # also fetches injury reports + snap counts

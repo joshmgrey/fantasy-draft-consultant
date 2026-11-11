@@ -125,27 +125,68 @@ class RecordingEmbeddings:
         return [1.0, float(len(text))]
 
 
-def test_index_embeds_profiles_and_writes_in_batches(raw, monkeypatch):
-    added, opened = [], {}
+def test_index_stages_in_batches_then_swaps(raw, monkeypatch):
+    added, opened, swapped = [], {}, []
 
     class FakeStore:
         def add_embeddings(self, texts, embeddings, metadatas, ids):
             added.append((texts, embeddings, metadatas, ids))
 
-    def fake_open(url, emb, *, create=False, pre_delete=False):
-        opened.update(url=url, create=create, pre_delete=pre_delete)
+    def fake_open(url, emb, *, create=False, pre_delete=False, collection=None):
+        opened.update(url=url, create=create, pre_delete=pre_delete, collection=collection)
         return FakeStore()
 
     monkeypatch.setattr(index, "open_store", fake_open)
+    monkeypatch.setattr(index, "swap_in_staging", lambda url: swapped.append((url, len(added))))
     emb = RecordingEmbeddings()
     n = index.index("postgresql://x/y", raw, 2020, 2021, embeddings=emb, batch=2)
     assert n == 3
-    assert opened == {"url": "postgresql://x/y", "create": True, "pre_delete": True}
+    assert opened == {"url": "postgresql://x/y", "create": True, "pre_delete": True,
+                      "collection": index.STAGING}
     assert [len(b[0]) for b in added] == [2, 1]
+    assert swapped == [("postgresql://x/y", 2)]                    # swap only after every batch
     texts, vecs, metas, ids = added[0]
     assert emb.calls[0] == [m["profile"] for m in metas]           # vectors embed profiles
     assert any("Next season" in t for t in texts)                   # stored text keeps outcomes
-    assert all(i == f"{m['player_id']}-{m['season']}" for i, m in zip(ids, metas))
+    # IDs carry a per-build prefix so staging never upserts over live rows.
+    prefixes = {i.split(":")[0] for b in added for i in b[3]}
+    assert len(prefixes) == 1 and len(prefixes.pop()) == 8
+    assert all(i.endswith(f":{m['player_id']}-{m['season']}") for i, m in zip(ids, metas))
+
+
+def test_swap_needs_exactly_one_staged_collection(monkeypatch):
+    executed = []
+
+    class Result:
+        rowcount = 0
+
+    class Conn:
+        def execute(self, stmt, params):
+            executed.append(str(stmt))
+            return Result()
+
+    class Begin:
+        def __enter__(self):
+            return Conn()
+
+        def __exit__(self, *exc):
+            return False
+
+    class Engine:
+        disposed = False
+
+        def begin(self):
+            return Begin()
+
+        def dispose(self):
+            Engine.disposed = True
+
+    import sqlalchemy
+    monkeypatch.setattr(sqlalchemy, "create_engine", lambda url: Engine())
+    with pytest.raises(RuntimeError, match="expected one staged collection"):
+        index.swap_in_staging("postgresql://x/y")
+    assert executed[0].startswith("DELETE") and executed[1].startswith("UPDATE")
+    assert Engine.disposed
 
 
 def test_index_cli_requires_a_database(monkeypatch, capsys):

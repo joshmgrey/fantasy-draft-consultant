@@ -15,6 +15,7 @@ import os
 import pytest
 
 from analysis_core import retrieval
+from analysis_core.db_url import sqlalchemy_url
 from analysis_core.retrieval import Retriever, open_store
 from ml.rag import index
 from tests.test_rag_documents import RecordingEmbeddings, raw  # noqa: F401  (fixture)
@@ -52,10 +53,24 @@ def test_index_then_retrieve(raw, monkeypatch):  # noqa: F811
     # The injury season ranks first for the injury query.
     assert Retriever(store, k=1).retrieve("Alpha One")[0].metadata["season"] == 2020
 
-    # Reindexing replaces the collection rather than duplicating it.
+    # Reindexing swaps in a fresh collection: no duplicates, no staging left
+    # behind, and a store opened *before* the reindex (as a running service
+    # would hold) still finds the documents, because PGVector resolves the
+    # collection by name per query.
     index.index(URL, raw, 2020, 2021, embeddings=emb)
-    again = Retriever(open_store(URL, emb)).retrieve("Alpha One")
+    again = Retriever(store).retrieve("Alpha One")
     assert [d.metadata["season"] for d in again] == [2021, 2020]
+    from sqlalchemy import create_engine, text
+    engine = create_engine(sqlalchemy_url(URL))
+    with engine.connect() as conn:
+        names = [r[0] for r in conn.execute(text("SELECT name FROM langchain_pg_collection"))]
+        rows = conn.execute(text(
+            "SELECT count(*) FROM langchain_pg_embedding e JOIN langchain_pg_collection c "
+            "ON e.collection_id = c.uuid WHERE c.name = :n"), {"n": retrieval.COLLECTION}).scalar()
+        total = conn.execute(text("SELECT count(*) FROM langchain_pg_embedding")).scalar()
+    engine.dispose()
+    assert retrieval.COLLECTION in names and index.STAGING not in names
+    assert rows == 3 and total == 3                                  # old rows cascaded away
 
     # The service path end to end, through the env var.
     monkeypatch.setenv(retrieval.DATABASE_ENV, URL)
