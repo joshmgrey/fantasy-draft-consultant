@@ -22,7 +22,7 @@ meet AWS.
           └────────────┬─────────────┘
                        │ 5432
           ┌────────────▼─────────────┐
-          │ RDS Postgres 16 (t4g.micro) │  isolated subnets, no internet route
+          │ RDS Postgres 18 (t4g.micro) │  isolated subnets, no internet route
           │  databases: core, analysis  │  pgvector enabled in analysis
           └─────────────────────────────┘
 ```
@@ -66,7 +66,7 @@ so each app container starts under `sh -c`, builds `DATABASE_URL` /
 `DB_USERNAME`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, then `exec`s the same
 gunicorn command as the Dockerfile's `CMD` (kept in `lib/config.ts`; update it
 if the Dockerfiles change). The generated password is alphanumeric so it needs
-no URL-encoding. Connections use `sslmode=require` (RDS for PG16 forces SSL).
+no URL-encoding. Connections use `sslmode=require` (RDS for Postgres 15+ forces SSL).
 
 **Timeouts.** ALB idle timeout 120s and a Service Connect per-request timeout
 of 120s (its default is 15s, far too short for `/analyze`), above core's
@@ -190,16 +190,18 @@ changes, so values you set this way survive later deploys.
 
 ## Migrating data from Render Postgres
 
-The stack includes a migration task definition (Postgres 16 client image)
+The stack includes a migration task definition (Postgres 18 client image)
 that runs `pg_dump --format=custom` against Render and
 `pg_restore --clean --if-exists --no-owner --no-acl` into RDS, from inside the
 VPC (RDS has no public endpoint). The script is `MIGRATE_SCRIPT` in
 [`lib/app-stack.ts`](lib/app-stack.ts).
 
-1. **Check versions.** Render's Postgres version is on the database page. The
-   client must be at least that version. For Render on PG17, redeploy with
-   `-c migrateImage=public.ecr.aws/docker/library/postgres:17-alpine`
-   (pg_restore 17 into a PG16 server works for plain schemas like this one).
+1. **Check versions.** Render's Postgres version is on the database page. RDS
+   and the migration client are Postgres 18, matching Render, so the dump and
+   restore run 18 -> 18. If Render is ever on a newer major version, raise both
+   (the RDS engine in `lib/app-stack.ts`, and the client image, also
+   overridable with `-c migrateImage=...`) before migrating: a dump from a
+   newer server can use settings an older server rejects.
 2. **Allow access.** In the Render database's *Access Control*, allow
    connections from outside Render (the task's public IP isn't known in
    advance, so `0.0.0.0/0` for the migration window, then remove it).
