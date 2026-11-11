@@ -1,0 +1,113 @@
+# Continuous integration for the Python app: core, analysis service, ml/.
+#
+# Runs the whole test suite on pull requests and on main, including the
+# live pgvector test against a real Postgres + pgvector service container,
+# and fails below 95% line coverage. On main it also publishes the test count
+# and coverage for the README badges (shields.io endpoint JSON on the
+# `badges` branch).
+#
+# The AWS deploy (deploy-aws.yml) waits for this workflow to pass on main.
+name: CI
+
+# Pull requests (every update) and main. Pushes to other branches get CI
+# once a PR is open, so PR branches aren't tested twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes an older run pointless. Never cancel
+# on main: the deploy waits for these runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      pgvector:
+        # Same major version as production RDS.
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_PGVECTOR_URL: postgresql://postgres:ci@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      # 3.12: the version the Docker images (and so production) run.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            analysis_service/requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r analysis_service/requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: >
+          pytest -p no:cacheprovider
+          --cov --cov-report=term --cov-report=xml:coverage.xml
+          --cov-fail-under=95
+          --junitxml=junit.xml
+
+      - name: Summarize
+        if: always() && hashFiles('junit.xml') != '' && hashFiles('coverage.xml') != ''
+        run: python -m ml.ci_badges junit.xml coverage.xml --summary >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            junit.xml
+            coverage.xml
+
+  # Publishes badge JSON for the README. Main only, after the tests pass.
+  badges:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-results
+
+      - name: Write badge JSON
+        run: python -m ml.ci_badges junit.xml coverage.xml --out badges-out
+
+      # The `badges` branch holds only these generated JSON files. It is
+      # replaced on every main run, so it never accumulates history.
+      - name: Publish to the badges branch
+        working-directory: badges-out
+        run: |
+          git init -q -b badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "Badges for ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" badges

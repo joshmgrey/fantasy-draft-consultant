@@ -6,3 +6,5 @@ pandas>=2.2
 # Experiment tracking + model registry for training (ml/tracking.py). Optional:
 # python -m ml.train runs without it.
 mlflow>=3.18  # skops_trusted_types on log_model
+# Regenerating the link-preview image (scripts/og_image.py).
+pillow>=10
