@@ -28,6 +28,8 @@ import pandas as pd
 
 from analysis_core.teams import current_abbr
 
+from .download import raw_file
+
 SCORING = {
     "sacks": 1,
     "interceptions": 2,
@@ -40,6 +42,9 @@ SCORING = {
 # (most points allowed, fantasy points), checked in order.
 POINTS_ALLOWED_TIERS = ((0, 10), (6, 7), (13, 4), (20, 1), (27, 0), (34, -1))
 POINTS_ALLOWED_FLOOR = -4  # 35 or more
+
+# Roof types that count as an indoor game (``games.csv`` ``roof`` column).
+INDOOR_ROOFS = ("dome", "closed")
 
 _WEEK_COLUMNS = [
     "season", "week", "team", "season_type", "opponent_team",
@@ -79,28 +84,35 @@ def points_allowed_points(points_allowed) -> np.ndarray:
 def load_team_weeks(raw_dir: Path, seasons: Iterable[int]) -> pd.DataFrame:
     frames = []
     for season in seasons:
-        path = Path(raw_dir) / f"stats_team_week_{season}.csv"
+        path = raw_file(raw_dir, f"stats_team_week_{season}.csv")
         frames.append(pd.read_csv(path, usecols=_WEEK_COLUMNS, low_memory=False))
     return pd.concat(frames, ignore_index=True)
 
 
 def load_games(raw_dir: Path) -> pd.DataFrame:
-    cols = ["season", "game_type", "week", "home_team", "away_team", "home_score", "away_score"]
-    return pd.read_csv(Path(raw_dir) / "games.csv", usecols=cols, low_memory=False)
+    cols = {"season", "game_type", "week", "home_team", "away_team",
+            "home_score", "away_score", "roof"}
+    return pd.read_csv(raw_file(raw_dir, "games.csv"), usecols=lambda c: c in cols,
+                       low_memory=False)
 
 
 def _team_games(games: pd.DataFrame) -> pd.DataFrame:
-    """Regular-season games, one row per team per game (both sides)."""
+    """Regular-season games, one row per team per game (both sides).
+    ``indoor`` is 1.0 for a dome or closed roof (NaN without a roof column)."""
     reg = games[games["game_type"] == "REG"]
+    indoor = (reg["roof"].isin(INDOOR_ROOFS).astype(float) if "roof" in reg
+              else pd.Series(np.nan, index=reg.index))
     home = pd.DataFrame({
         "season": reg["season"], "week": reg["week"],
         "team": reg["home_team"], "opponent": reg["away_team"],
         "points_scored": reg["home_score"], "points_allowed": reg["away_score"],
+        "indoor": indoor,
     })
     away = pd.DataFrame({
         "season": reg["season"], "week": reg["week"],
         "team": reg["away_team"], "opponent": reg["home_team"],
         "points_scored": reg["away_score"], "points_allowed": reg["home_score"],
+        "indoor": indoor,
     })
     out = pd.concat([home, away], ignore_index=True)
     out["team"] = out["team"].map(current_abbr)

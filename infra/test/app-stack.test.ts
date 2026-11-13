@@ -411,7 +411,7 @@ describe('RAG index task', () => {
     expect(cmd).toMatch(/^export RAG_DATABASE_URL="postgresql:\/\/[^"]+\/analysis\?sslmode=require"; /);
     // Both steps must run: a bare `exec a && b` would never reach b.
     expect(cmd).toContain(`exec sh -c '${RAG_INDEX_COMMAND}'`);
-    expect(RAG_INDEX_COMMAND).toBe('python -m ml.download && python -m ml.rag.index');
+    expect(RAG_INDEX_COMMAND).toBe('python -m ml.download --rag-only && python -m ml.rag.index');
     expect(JSON.stringify(c['rag-index'].Image)).toContain('fdc/rag-indexer:abc123');
     expect(secretNames(c['rag-index'])).toEqual(expect.arrayContaining(['DB_USERNAME', 'DB_PASSWORD']));
   });

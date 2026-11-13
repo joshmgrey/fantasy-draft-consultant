@@ -125,6 +125,12 @@ def evaluate(table: pd.DataFrame, first: int, last: int, matrix: Matrix,
              tracker: Optional[NullTracker] = None) -> tuple[Candidate, object, dict]:
     """Pick, score, and refit a model. Returns the chosen candidate, the model
     refit on every row (for serving), and the report sections."""
+    if last - first < BACKTEST_MIN_TRAIN_SEASONS:
+        raise ValueError(
+            f"seasons {first}-{last} are too few: rolling validation and the backtest "
+            f"need at least {BACKTEST_MIN_TRAIN_SEASONS + 1} seasons (first <= "
+            f"{last - BACKTEST_MIN_TRAIN_SEASONS} for last={last})"
+        )
     best, leaderboard = select_model(table, last, matrix, tracker)
 
     train = table[table["target_season"] < last]

@@ -6,13 +6,13 @@ Data: nflverse stats_player_reg + players + games (CC-BY 4.0), seasons 2002–20
 **Scoring (standard kicker):** PAT +1, missed PAT -1; FG 0–39 yds +3, 40–49 +4, 50+ +5; missed FG -1 (a blocked kick counts as a miss).
 
 **Chosen model:** `ridge(alpha=100.0)` (lowest mean MAE over validation seasons 2021–2024).
-**Test season 2025:** MAE 1.351 vs 1.984 for last season (31.9% lower) and 1.467 for the league average (7.9% lower).
+**Test season 2025:** MAE 1.356 vs 1.984 for last season (31.7% lower) and 1.467 for the league average (7.6% lower).
 
 ## Test season
 
 | Predictor | n | MAE | RMSE | Spearman |
 |---|---|---|---|---|
-| model | 32 | 1.351 | 1.778 | 0.238 |
+| model | 32 | 1.356 | 1.782 | 0.229 |
 | baseline · last season | 32 | 1.984 | 2.454 | -0.066 |
 | baseline · league average | 32 | 1.467 | 1.939 | — |
 
@@ -24,7 +24,7 @@ Each season scored by a model trained only on earlier seasons; averaged over sea
 
 | Predictor | Mean MAE | Mean Spearman |
 |---|---|---|
-| model | 1.194 | 0.197 |
+| model | 1.195 | 0.194 |
 | baseline · last season | 1.493 | 0.137 |
 | baseline · league average | 1.256 | — |
 
@@ -32,18 +32,18 @@ Each season scored by a model trained only on earlier seasons; averaged over sea
 
 | Model | Mean MAE | MAE by season |
 |---|---|---|
-| `ridge(alpha=100.0)` | 1.102 | 2021: 1.007, 2022: 0.977, 2023: 1.13, 2024: 1.294 |
-| `ridge(alpha=1.0)` | 1.107 | 2021: 1.026, 2022: 0.967, 2023: 1.132, 2024: 1.303 |
-| `ridge(alpha=10.0)` | 1.107 | 2021: 1.022, 2022: 0.975, 2023: 1.132, 2024: 1.298 |
-| `hgb(lr=0.03,leaf=50,depth=3)` | 1.13 | 2021: 1.082, 2022: 0.958, 2023: 1.163, 2024: 1.317 |
-| `hgb(lr=0.06,leaf=50,depth=5)` | 1.153 | 2021: 1.086, 2022: 1.011, 2023: 1.123, 2024: 1.393 |
-| `hgb(lr=0.03,leaf=20,depth=5)` | 1.156 | 2021: 1.138, 2022: 0.993, 2023: 1.149, 2024: 1.346 |
-| `hgb(lr=0.03,leaf=50,depth=5)` | 1.163 | 2021: 1.146, 2022: 1.011, 2023: 1.112, 2024: 1.384 |
+| `ridge(alpha=100.0)` | 1.104 | 2021: 1.015, 2022: 0.979, 2023: 1.133, 2024: 1.29 |
+| `ridge(alpha=10.0)` | 1.109 | 2021: 1.032, 2022: 0.976, 2023: 1.135, 2024: 1.294 |
+| `ridge(alpha=1.0)` | 1.11 | 2021: 1.034, 2022: 0.967, 2023: 1.138, 2024: 1.3 |
+| `hgb(lr=0.03,leaf=50,depth=3)` | 1.138 | 2021: 1.098, 2022: 0.941, 2023: 1.148, 2024: 1.365 |
+| `hgb(lr=0.03,leaf=20,depth=3)` | 1.156 | 2021: 1.109, 2022: 0.971, 2023: 1.179, 2024: 1.365 |
+| `hgb(lr=0.06,leaf=50,depth=3)` | 1.157 | 2021: 1.139, 2022: 0.968, 2023: 1.142, 2024: 1.381 |
+| `hgb(lr=0.03,leaf=20,depth=5)` | 1.159 | 2021: 1.094, 2022: 1.013, 2023: 1.167, 2024: 1.36 |
+| `hgb(lr=0.03,leaf=50,depth=5)` | 1.159 | 2021: 1.133, 2022: 0.97, 2023: 1.124, 2024: 1.409 |
 | `baseline: league_average` | 1.163 | 2021: 1.151, 2022: 0.954, 2023: 1.172, 2024: 1.376 |
-| `hgb(lr=0.03,leaf=20,depth=3)` | 1.164 | 2021: 1.121, 2022: 0.988, 2023: 1.202, 2024: 1.346 |
-| `hgb(lr=0.06,leaf=50,depth=3)` | 1.165 | 2021: 1.129, 2022: 1.001, 2023: 1.178, 2024: 1.352 |
-| `hgb(lr=0.06,leaf=20,depth=5)` | 1.176 | 2021: 1.152, 2022: 0.984, 2023: 1.196, 2024: 1.372 |
-| `hgb(lr=0.06,leaf=20,depth=3)` | 1.177 | 2021: 1.15, 2022: 1.033, 2023: 1.189, 2024: 1.335 |
+| `hgb(lr=0.06,leaf=20,depth=5)` | 1.169 | 2021: 1.11, 2022: 1.021, 2023: 1.137, 2024: 1.406 |
+| `hgb(lr=0.06,leaf=20,depth=3)` | 1.17 | 2021: 1.127, 2022: 1.013, 2023: 1.154, 2024: 1.385 |
+| `hgb(lr=0.06,leaf=50,depth=5)` | 1.172 | 2021: 1.15, 2022: 1.0, 2023: 1.141, 2024: 1.396 |
 | `baseline: last_season` | 1.345 | 2021: 1.485, 2022: 1.318, 2023: 1.13, 2024: 1.446 |
 
 ## Limitations

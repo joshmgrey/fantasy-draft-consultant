@@ -13,30 +13,10 @@ import pytest
 from analysis_core.projection import DST_ARTIFACT_FORMAT, Projector
 from ml import dst_features as D
 from ml import train_dst
+from tests.helpers import TEAMS, round_robin, schedule_abbr
 
-TEAMS = ["PIT", "BAL", "CLE", "CIN", "LV", "KC", "DEN", "LAC"]
 STAT_COLS = [c for c in D._WEEK_COLUMNS
              if c not in ("season", "week", "team", "season_type", "opponent_team")]
-
-
-def schedule_abbr(team, season):
-    # The schedule file uses a franchise's old abbreviation before a move;
-    # team stats always use the current one.
-    if team == "LV" and season < 2020:
-        return "OAK"
-    if team == "LAC" and season < 2017:
-        return "SD"
-    return team
-
-
-def round_robin(teams):
-    """Circle method: every team plays every other team once."""
-    teams = list(teams)
-    weeks = []
-    for _ in range(len(teams) - 1):
-        weeks.append([(teams[i], teams[-1 - i]) for i in range(len(teams) // 2)])
-        teams = [teams[0], teams[-1], *teams[1:-1]]
-    return weeks
 
 
 def synthetic_league(seasons, seed=0):

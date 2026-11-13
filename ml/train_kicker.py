@@ -29,8 +29,13 @@ import sklearn
 from analysis_core.projection import DEFAULT_KICKER_ARTIFACT_PATH, KICKER_ARTIFACT_FORMAT
 from analysis_core.season import current_season
 
+from analysis_core.projection import normalize_name
+
 from . import kicker_features as K
 from . import rolling
+from .download import raw_file
+from .dst_features import load_games
+from .features import load_players
 from .download import TEAM_FIRST
 from .tracking import NullTracker, make_tracker
 
@@ -41,10 +46,24 @@ REPORT_DIR = ML_DIR / "reports"
 EXPERIMENT = "kicker-projection"
 
 
-def serving_kickers(rows: pd.DataFrame, feature_season: int) -> dict:
+def non_kicker_names(raw_dir: Path) -> set:
+    """Normalized names of every non-kicker in ``players.csv`` (rookies included)."""
+    people = pd.read_csv(raw_file(raw_dir, "players.csv"),
+                         usecols=["display_name", "position"], low_memory=False)
+    others = people[people["position"] != "K"]["display_name"].dropna()
+    return set(others.map(normalize_name))
+
+
+def serving_kickers(rows: pd.DataFrame, feature_season: int, ambiguous=frozenset()) -> dict:
     """Latest-season rows keyed by normalized name; on a name clash keep the
-    kicker who played more games."""
+    kicker who played more games.
+
+    Lookup is by name alone and falls through from the player model, so a key
+    that also names a non-kicker (``ambiguous``) is left out: a rookie WR who
+    shares a kicker's name must not get the kicker's projection.
+    """
     latest = rows[(rows["season"] == feature_season) & (rows["games"] >= K.MIN_GAMES)]
+    latest = latest[~latest["name_key"].isin(ambiguous)]
     latest = latest.sort_values("games", ascending=False).drop_duplicates("name_key")
     return {
         rec.name_key: {
@@ -67,7 +86,7 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path,
 
 def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
     stats = K.load_kicking(raw_dir, range(first, last + 1))
-    rows = K.season_rows(stats, K.load_players(raw_dir), K.load_games(raw_dir))
+    rows = K.season_rows(stats, load_players(raw_dir), load_games(raw_dir))
     table = K.training_table(rows)
 
     tracker.log_params({
@@ -98,7 +117,7 @@ def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
         "model_name": best.name,
         "test_mae": report["test"]["model"]["mae"],
         "mlflow_run_id": tracker.run_id,
-        "players": serving_kickers(rows, last),
+        "players": serving_kickers(rows, last, non_kicker_names(raw_dir)),
     }
     tracker.log_params({f"chosen_{k}": v for k, v in best.params.items()})
     rolling.save_and_track(

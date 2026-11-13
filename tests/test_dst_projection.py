@@ -12,7 +12,7 @@ from analysis_core.projection import DST_ARTIFACT_FORMAT, Projection, project_pl
 from analysis_core.season import current_season
 from app.analysis.client.base import Actor
 from app.analysis.client.inprocess import InProcessAnalysisClient
-from tests.test_projection import _artifact
+from tests.helpers import player_artifact as _artifact
 
 CLEAN = "RISK: 4/10\nVERDICT: Pass\nREASON: Streamable at its ADP."
 

@@ -14,7 +14,7 @@ from analysis_core.projection import KICKER_ARTIFACT_FORMAT, Projection, project
 from analysis_core.season import current_season
 from app.analysis.client.base import Actor
 from app.analysis.client.inprocess import InProcessAnalysisClient
-from tests.test_projection import _artifact
+from tests.helpers import player_artifact as _artifact
 
 CLEAN = "RISK: 3/10\nVERDICT: Pass\nREASON: Kickers go last."
 

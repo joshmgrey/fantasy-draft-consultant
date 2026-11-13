@@ -139,7 +139,7 @@ echo "migration complete"
 `.trim();
 
 /** What the RAG index task runs (also the indexer image's CMD). */
-export const RAG_INDEX_COMMAND = 'python -m ml.download && python -m ml.rag.index';
+export const RAG_INDEX_COMMAND = 'python -m ml.download --rag-only && python -m ml.rag.index';
 
 export class AppStack extends Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {

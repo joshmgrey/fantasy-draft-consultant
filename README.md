@@ -143,9 +143,9 @@ against the kicker model.
 | **Selection** | Same rolling scheme as the D/ST model (`ml/rolling.py`): four validation seasons (2021–2024), 2025 scored once, plus a 16-season backtest |
 | **Model** | Ridge regression (`alpha=100`) |
 
-**Results.** Over the 2010–2025 backtest the model's error is **1.19** points per game, vs **1.49** for
-"same as last season" and **1.26** for the league average; on 2025 alone it is 1.35 vs 1.98 and 1.47.
-Unlike the D/ST model it also ranks a little better than last season's finish (Spearman 0.20 vs 0.14),
+**Results.** Over the 2010–2025 backtest the model's error is **1.20** points per game, vs **1.49** for
+"same as last season" and **1.26** for the league average; on 2025 alone it is 1.36 vs 1.98 and 1.47.
+Unlike the D/ST model it also ranks a little better than last season's finish (Spearman 0.19 vs 0.14),
 but kicker scoring is noisy and the margin over the league average is small. It projects scoring
 *when he kicks* and assumes the kicker stays on his season-t team. Full results:
 [`ml/reports/KICKER_REPORT.md`](ml/reports/KICKER_REPORT.md).
@@ -199,7 +199,7 @@ embedding model has loaded (measured), so the k8s analysis container requests 1 
 limited to 1.5 Gi for its two workers.
 
 ```bash
-python -m ml.download                       # also fetches injury reports + snap counts
+python -m ml.download --rag-only            # just what retrieval needs (injuries, snap counts, player stats)
 RAG_DATABASE_URL=postgresql://... python -m ml.rag.index    # needs pgvector; rebuilds the collection
 python -m ml.rag.evaluate                   # writes ml/reports/RAG_REPORT.md (no database needed)
 ```

@@ -13,14 +13,15 @@ import pytest
 from analysis_core.projection import KICKER_ARTIFACT_FORMAT, Projector
 from ml import kicker_features as K
 from ml import train_kicker
-from tests.test_dst_features import TEAMS, round_robin, schedule_abbr
+from ml import dst_features as D
+from tests.helpers import TEAMS, round_robin, schedule_abbr
 
-NUMERIC = [c for c in K._STAT_COLUMNS if c not in
-           ("player_id", "player_display_name", "position", "season", "recent_team")]
+NUMERIC = [c for c in K._STAT_COLUMNS if c not in (*K._TEXT_COLUMNS, "season")]
 
 
 def kick_row(pid, season, team, *, games=16, name=None, position="K", **stats):
     row = {c: 0 for c in NUMERIC}
+    row["fg_blocked_list"] = ""
     row.update(player_id=pid, player_display_name=name or f"Kicker {pid}",
                position=position, season=season, recent_team=team, games=games, **stats)
     return row
@@ -66,12 +67,15 @@ def synthetic_kickers(seasons, seed=0):
     return pd.DataFrame(rows)
 
 
-def players_csv(n=len(TEAMS)):
-    return pd.DataFrame({
-        "gsis_id": [f"K{i}" for i in range(n)],
-        "birth_date": ["1995-09-01"] * n,
-        "rookie_season": [2005] * n,
-    })
+def players_csv(n=len(TEAMS), extra=()):
+    """players.csv rows: one kicker per team, plus ``extra`` (name, position)."""
+    rows = [{"gsis_id": f"K{i}", "display_name": f"Kicker {chr(65 + i)}", "position": "K",
+             "birth_date": "1995-09-01", "rookie_season": 2005, "draft_round": None}
+            for i in range(n)]
+    rows += [{"gsis_id": f"X{i}", "display_name": name, "position": pos,
+              "birth_date": None, "rookie_season": 2019, "draft_round": 1}
+             for i, (name, pos) in enumerate(extra)]
+    return pd.DataFrame(rows)
 
 
 # --------------------------------------------------------------------------- #
@@ -112,6 +116,26 @@ def test_kicker_who_never_kicked_is_dropped(league):
     assert "K9" not in set(rows.player_id)
 
 
+def test_blocked_kicks_count_at_their_distance():
+    b40, b50 = K.blocked_by_distance(pd.Series(["43;51;55", "", None, "38", "49"]))
+    assert b40.tolist() == [1, 0, 0, 0, 1]
+    assert b50.tolist() == [2, 0, 0, 0, 0]
+
+
+def test_blocked_long_kicks_are_attempts_but_not_makes(league):
+    stats, games, rows = league
+    blocked = stats.copy()
+    sel = (blocked.player_id == "K0") & (blocked.season == 2018)
+    blocked.loc[sel, "fg_blocked_list"] = "52;54"
+    blocked.loc[sel, "fg_att"] += 2
+    before = rows[(rows.player_id == "K0") & (rows.season == 2018)].iloc[0]
+    after = K.season_rows(blocked, players_csv(), games)
+    after = after[(after.player_id == "K0") & (after.season == 2018)].iloc[0]
+    assert after.fg_50_att_pg == pytest.approx(before.fg_50_att_pg + 2 / before.games)
+    assert after.fg_50_pct < before.fg_50_pct
+    assert after.ppg == pytest.approx(before.ppg - 2 / before.games)  # two misses
+
+
 def test_rates_and_percentages(league):
     stats, _, rows = league
     r = rows[(rows.player_id == "K0") & (rows.season == 2018)].iloc[0]
@@ -134,7 +158,7 @@ def test_team_context_and_next_seasons_schedule(league):
     _, games, rows = league
     den = rows[(rows.team == "DEN") & (rows.season == 2019)].iloc[0]
     # DEN plays 3 or 4 home games (all indoors) out of 7 in 2020.
-    tg = K._team_games(games)
+    tg = D._team_games(games)
     assert den.sched_indoor_share == pytest.approx(
         tg[(tg.team == "DEN") & (tg.season == 2020)]["indoor"].mean())
     assert 0 < den.sched_indoor_share < 1
@@ -192,7 +216,8 @@ def trained(tmp_path_factory):
     games = games_for(seasons + [2020])
     games.loc[games.season == 2020, ["home_score", "away_score"]] = np.nan
     games.to_csv(raw / "games.csv", index=False)
-    players_csv().to_csv(raw / "players.csv", index=False)
+    # A rookie WR who shares kicker B's name: kicker B must not be served.
+    players_csv(extra=[("Kicker B", "WR")]).to_csv(raw / "players.csv", index=False)
     out = root / "kicker.joblib"
     report = train_kicker.run(raw, 2008, 2019, out, root / "reports")
     return {"root": root, "out": out, "report": report}
@@ -214,5 +239,23 @@ def test_artifact_serves_kickers_by_name(trained):
     assert projector.season == 2020
     p = projector.project("kicker d")
     assert (p.player, p.position, p.team, p.scoring) == ("Kicker D", "K", "CIN", "K")
-    assert len(projector._players) == len(TEAMS)
+    assert projector.project("kicker b") is None  # also a WR's name
+    assert len(projector._players) == len(TEAMS) - 1
     assert Projector.load(trained["out"]) is None  # not a player-model artifact
+
+
+def test_too_few_seasons_is_a_clear_error(tmp_path):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    stats = synthetic_kickers(range(2015, 2020))
+    for season, frame in stats.groupby("season"):
+        frame.to_csv(raw / f"stats_player_reg_{season}.csv", index=False)
+    games_for(range(2015, 2021)).to_csv(raw / "games.csv", index=False)
+    players_csv().to_csv(raw / "players.csv", index=False)
+    with pytest.raises(ValueError, match="too few"):
+        train_kicker.run(raw, 2015, 2019, tmp_path / "k.joblib", tmp_path / "reports")
+
+
+def test_missing_raw_file_says_to_download(tmp_path):
+    with pytest.raises(FileNotFoundError, match="python -m ml.download"):
+        K.load_kicking(tmp_path, [2002])

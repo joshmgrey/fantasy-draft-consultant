@@ -10,8 +10,9 @@ checks that no t + 1 result leaks into the features.
 Inputs are nflverse files (https://github.com/nflverse/nflverse-data):
 
 * ``stats_player_reg_<season>.csv`` — regular-season kicking totals
-* ``players.csv`` — birth date, rookie season
+* ``players.csv`` — birth date, rookie season (``ml.features.load_players``)
 * ``games.csv`` — final scores, roof type, and future schedules
+  (``ml.dst_features.load_games``)
 
 Kicker fantasy points use common standard scoring (see :data:`SCORING`); a
 blocked kick counts as a miss. Training-only module (pandas).
@@ -28,6 +29,9 @@ import pandas as pd
 from analysis_core.projection import normalize_name
 from analysis_core.teams import current_abbr
 
+from .download import raw_file
+from .dst_features import _team_games
+
 SCORING = {
     "pat_made": 1,
     "pat_missed": -1,
@@ -40,8 +44,6 @@ SCORING = {
 # Same threshold as the player model: fewer games is too noisy as a label.
 MIN_GAMES = 4
 
-INDOOR_ROOFS = ("dome", "closed")
-
 _STAT_COLUMNS = [
     "player_id", "player_display_name", "position", "season", "recent_team", "games",
     "fg_made", "fg_att", "fg_long",
@@ -49,7 +51,10 @@ _STAT_COLUMNS = [
     "fg_made_50_59", "fg_made_60_",
     "fg_missed_40_49", "fg_missed_50_59", "fg_missed_60_",
     "pat_made", "pat_att",
+    "fg_blocked_list",  # ";"-separated distances of blocked attempts
 ]
+_TEXT_COLUMNS = ("player_id", "player_display_name", "position", "recent_team",
+                 "fg_blocked_list")
 
 # The model's inputs, in a fixed order. Saved in the artifact so serving
 # builds exactly the same vector.
@@ -67,21 +72,21 @@ FEATURES = [
 def load_kicking(raw_dir: Path, seasons: Iterable[int]) -> pd.DataFrame:
     frames = []
     for season in seasons:
-        path = Path(raw_dir) / f"stats_player_reg_{season}.csv"
+        path = raw_file(raw_dir, f"stats_player_reg_{season}.csv")
         frame = pd.read_csv(path, usecols=_STAT_COLUMNS, low_memory=False)
         frames.append(frame[frame["position"] == "K"])
     return pd.concat(frames, ignore_index=True)
 
 
-def load_players(raw_dir: Path) -> pd.DataFrame:
-    cols = ["gsis_id", "birth_date", "rookie_season"]
-    return pd.read_csv(Path(raw_dir) / "players.csv", usecols=cols, low_memory=False)
+def blocked_by_distance(blocked_list: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """Blocked field goals at 40–49 and at 50+ yards, from ``fg_blocked_list``."""
+    def count(text, lo, hi):
+        if not isinstance(text, str) or not text.strip():
+            return 0
+        return sum(lo <= float(d) < hi for d in text.split(";") if d.strip())
 
-
-def load_games(raw_dir: Path) -> pd.DataFrame:
-    cols = ["season", "game_type", "week", "home_team", "away_team",
-            "home_score", "away_score", "roof"]
-    return pd.read_csv(Path(raw_dir) / "games.csv", usecols=cols, low_memory=False)
+    return (blocked_list.map(lambda t: count(t, 40, 50)),
+            blocked_list.map(lambda t: count(t, 50, 1000)))
 
 
 def fantasy_points(df: pd.DataFrame) -> pd.Series:
@@ -99,26 +104,10 @@ def fantasy_points(df: pd.DataFrame) -> pd.Series:
     )
 
 
-def _team_games(games: pd.DataFrame) -> pd.DataFrame:
-    """Regular-season games, one row per team per game (both sides)."""
-    reg = games[games["game_type"] == "REG"]
-    sides = []
-    for team, opp, scored, allowed in (("home_team", "away_team", "home_score", "away_score"),
-                                       ("away_team", "home_team", "away_score", "home_score")):
-        sides.append(pd.DataFrame({
-            "season": reg["season"], "team": reg[team].map(current_abbr),
-            "opponent": reg[opp].map(current_abbr),
-            "points_scored": reg[scored], "points_allowed": reg[allowed],
-            "indoor": reg["roof"].isin(INDOOR_ROOFS).astype(float),
-        }))
-    return pd.concat(sides, ignore_index=True)
-
-
 def season_rows(stats: pd.DataFrame, players: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     """Per-kicker, per-season feature rows (no label yet)."""
     df = stats[(stats["games"] > 0) & ((stats["fg_att"] + stats["pat_att"]) > 0)].copy()
-    num = [c for c in _STAT_COLUMNS if c not in
-           ("player_id", "player_display_name", "position", "season", "recent_team")]
+    num = [c for c in _STAT_COLUMNS if c not in (*_TEXT_COLUMNS, "season")]
     df[num] = df[num].fillna(0)
     df["team"] = df["recent_team"].map(current_abbr)
 
@@ -126,9 +115,11 @@ def season_rows(stats: pd.DataFrame, players: pd.DataFrame, games: pd.DataFrame)
     df["ppg"] = df["points"] / df["games"]
     df["fg_att_pg"] = df["fg_att"] / df["games"]
     df["fg_pct"] = (df["fg_made"] / df["fg_att"]).where(df["fg_att"] > 0)
-    fg_40_49_att = df["fg_made_40_49"] + df["fg_missed_40_49"]
+    # The missed-by-distance columns leave out blocks; fg_att counts them.
+    blocked_40_49, blocked_50 = blocked_by_distance(df["fg_blocked_list"])
+    fg_40_49_att = df["fg_made_40_49"] + df["fg_missed_40_49"] + blocked_40_49
     fg_50_made = df["fg_made_50_59"] + df["fg_made_60_"]
-    fg_50_att = fg_50_made + df["fg_missed_50_59"] + df["fg_missed_60_"]
+    fg_50_att = fg_50_made + df["fg_missed_50_59"] + df["fg_missed_60_"] + blocked_50
     df["fg_40_49_att_pg"] = fg_40_49_att / df["games"]
     df["fg_50_att_pg"] = fg_50_att / df["games"]
     df["fg_50_pct"] = (fg_50_made / fg_50_att).where(fg_50_att > 0)

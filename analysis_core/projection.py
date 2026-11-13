@@ -101,10 +101,6 @@ class Projection:
     typical_error: float   # test-season MAE, in points per game
 
     @property
-    def is_dst(self) -> bool:
-        return self.position == DST_POSITION
-
-    @property
     def scoring(self) -> str:
         """The scoring ``projected_ppg`` is in: "D/ST", "K", or "PPR"."""
         return self.position if self.position in _UNITS else "PPR"
@@ -213,16 +209,6 @@ def _get(kind: str) -> Optional[Projector]:
 def get_projector() -> Optional[Projector]:
     """Process-wide player projector, loaded once on first use."""
     return _get("player")
-
-
-def get_dst_projector() -> Optional[Projector]:
-    """Process-wide D/ST projector, loaded once on first use."""
-    return _get("dst")
-
-
-def get_kicker_projector() -> Optional[Projector]:
-    """Process-wide kicker projector, loaded once on first use."""
-    return _get("kicker")
 
 
 _stale_warned: set = set()

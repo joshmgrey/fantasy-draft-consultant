@@ -212,6 +212,16 @@ def test_download_fetches_each_season_and_players(tmp_path, monkeypatch):
     ]
 
 
+def test_rag_only_download_skips_training_history(tmp_path, monkeypatch):
+    from ml import download
+
+    fetched = []
+    monkeypatch.setattr(download, "fetch", lambda url, dest: fetched.append(dest.name))
+    download.main(["--first", "2020", "--last", "2020", "--rag-only", "--out", str(tmp_path)])
+    assert fetched == ["stats_player_reg_2020.csv", "injuries_2020.csv",
+                       "snap_counts_2020.csv", "players.csv"]
+
+
 def test_fetch_writes_the_response_body(tmp_path, monkeypatch):
     import io
 
