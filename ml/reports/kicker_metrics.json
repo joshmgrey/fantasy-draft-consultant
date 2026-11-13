@@ -1,0 +1,205 @@
+{
+  "trained_on": "2026-11-13",
+  "data": "nflverse stats_player_reg + players + games (CC-BY 4.0)",
+  "scoring": {
+    "pat_made": 1,
+    "pat_missed": -1,
+    "fg_0_39": 3,
+    "fg_40_49": 4,
+    "fg_50_plus": 5,
+    "fg_missed": -1
+  },
+  "seasons": [
+    2002,
+    2025
+  ],
+  "rows": {
+    "train": 663,
+    "test": 32,
+    "final": 695
+  },
+  "split": {
+    "validation_target_seasons": [
+      2021,
+      2024
+    ],
+    "test_target_season": 2025
+  },
+  "chosen_model": "ridge(alpha=100.0)",
+  "validation_leaderboard": [
+    {
+      "model": "ridge(alpha=100.0)",
+      "mae": 1.102,
+      "mae_by_season": {
+        "2021": 1.007,
+        "2022": 0.977,
+        "2023": 1.13,
+        "2024": 1.294
+      }
+    },
+    {
+      "model": "ridge(alpha=1.0)",
+      "mae": 1.107,
+      "mae_by_season": {
+        "2021": 1.026,
+        "2022": 0.967,
+        "2023": 1.132,
+        "2024": 1.303
+      }
+    },
+    {
+      "model": "ridge(alpha=10.0)",
+      "mae": 1.107,
+      "mae_by_season": {
+        "2021": 1.022,
+        "2022": 0.975,
+        "2023": 1.132,
+        "2024": 1.298
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=3)",
+      "mae": 1.13,
+      "mae_by_season": {
+        "2021": 1.082,
+        "2022": 0.958,
+        "2023": 1.163,
+        "2024": 1.317
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=5)",
+      "mae": 1.153,
+      "mae_by_season": {
+        "2021": 1.086,
+        "2022": 1.011,
+        "2023": 1.123,
+        "2024": 1.393
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=5)",
+      "mae": 1.156,
+      "mae_by_season": {
+        "2021": 1.138,
+        "2022": 0.993,
+        "2023": 1.149,
+        "2024": 1.346
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=5)",
+      "mae": 1.163,
+      "mae_by_season": {
+        "2021": 1.146,
+        "2022": 1.011,
+        "2023": 1.112,
+        "2024": 1.384
+      }
+    },
+    {
+      "model": "baseline: league_average",
+      "mae": 1.163,
+      "mae_by_season": {
+        "2021": 1.151,
+        "2022": 0.954,
+        "2023": 1.172,
+        "2024": 1.376
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=3)",
+      "mae": 1.164,
+      "mae_by_season": {
+        "2021": 1.121,
+        "2022": 0.988,
+        "2023": 1.202,
+        "2024": 1.346
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=3)",
+      "mae": 1.165,
+      "mae_by_season": {
+        "2021": 1.129,
+        "2022": 1.001,
+        "2023": 1.178,
+        "2024": 1.352
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=5)",
+      "mae": 1.176,
+      "mae_by_season": {
+        "2021": 1.152,
+        "2022": 0.984,
+        "2023": 1.196,
+        "2024": 1.372
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=3)",
+      "mae": 1.177,
+      "mae_by_season": {
+        "2021": 1.15,
+        "2022": 1.033,
+        "2023": 1.189,
+        "2024": 1.335
+      }
+    },
+    {
+      "model": "baseline: last_season",
+      "mae": 1.345,
+      "mae_by_season": {
+        "2021": 1.485,
+        "2022": 1.318,
+        "2023": 1.13,
+        "2024": 1.446
+      }
+    }
+  ],
+  "test": {
+    "model": {
+      "n": 32,
+      "mae": 1.351,
+      "rmse": 1.778,
+      "spearman": 0.238
+    },
+    "baseline_last_season": {
+      "n": 32,
+      "mae": 1.984,
+      "rmse": 2.454,
+      "spearman": -0.066
+    },
+    "baseline_league_average": {
+      "n": 32,
+      "mae": 1.467,
+      "rmse": 1.939,
+      "spearman": null
+    }
+  },
+  "backtest": {
+    "target_seasons": [
+      2010,
+      2025
+    ],
+    "model": {
+      "mae": 1.194,
+      "spearman": 0.197
+    },
+    "baseline_last_season": {
+      "mae": 1.493,
+      "spearman": 0.137
+    },
+    "baseline_league_average": {
+      "mae": 1.256,
+      "spearman": null
+    }
+  },
+  "test_mae_improvement_pct": {
+    "vs_last_season": 31.9,
+    "vs_league_average": 7.9
+  },
+  "sklearn_version": "1.9.1",
+  "mlflow_run_id": "f9ee45dee6fa40c3ac5f996c2cb3c1a6"
+}

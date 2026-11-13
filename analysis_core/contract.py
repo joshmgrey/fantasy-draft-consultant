@@ -131,7 +131,7 @@ class AnalyzeResponse:
     # Added in v1 as an optional field: older services omit it, and readers
     # treat a missing key as null.
     projected_ppg: Optional[float] = None
-    # Optional too: "PPR" or "D/ST", the scoring projected_ppg is in.
+    # Optional too: "PPR", "K", or "D/ST", the scoring projected_ppg is in.
     projection_scoring: Optional[str] = None
 
     def to_wire(self) -> dict:

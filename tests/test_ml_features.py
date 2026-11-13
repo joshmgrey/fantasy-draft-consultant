@@ -205,6 +205,8 @@ def test_download_fetches_each_season_and_players(tmp_path, monkeypatch):
         (download.team_weeks_url(2019), "stats_team_week_2019.csv"),
         (download.team_weeks_url(2020), "stats_team_week_2020.csv"),
         (download.team_weeks_url(2021), "stats_team_week_2021.csv"),
+        # Kicker model: player stats from the same earlier start.
+        (download.stats_url(2019), "stats_player_reg_2019.csv"),
         (download.GAMES_URL, "games.csv"),
         (download.PLAYERS_URL, "players.csv"),
     ]

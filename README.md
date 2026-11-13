@@ -127,7 +127,35 @@ python -m ml.train_dst                  # writes analysis_core/artifacts/dst_pro
 
 It is served, falls back, and is tracked (MLflow experiment and registered model `dst-projection`)
 the same way as the player model. The API's optional `projection_scoring` field says which scoring
-`projected_ppg` is in (`"PPR"` or `"D/ST"`).
+`projected_ppg` is in (`"PPR"`, `"K"` or `"D/ST"`).
+
+### Kicker projection model
+
+Kickers are looked up by name like any player; a name the player model doesn't know is tried
+against the kicker model.
+
+| | |
+|---|---|
+| **Data** | [nflverse](https://github.com/nflverse/nflverse-data) regular-season kicking stats, 2002–2025, plus final scores and roof type per game (CC-BY 4.0) |
+| **Scoring** | Standard kicker: PAT +1, missed PAT −1, FG 0–39 yds +3, 40–49 +4, 50+ +5, missed FG −1 (a blocked kick counts as a miss) |
+| **Features** | Last season's points per game, the season before, FG attempts per game and accuracy, 40–49 and 50+ attempts and accuracy, PAT attempts and accuracy, longest FG, age, experience, the team's points per game, and **next season's schedule** for that team: share of games indoors and the opponents' points allowed |
+| **Label** | Kicker fantasy points per game the following season (at least 4 games in both seasons) |
+| **Selection** | Same rolling scheme as the D/ST model (`ml/rolling.py`): four validation seasons (2021–2024), 2025 scored once, plus a 16-season backtest |
+| **Model** | Ridge regression (`alpha=100`) |
+
+**Results.** Over the 2010–2025 backtest the model's error is **1.19** points per game, vs **1.49** for
+"same as last season" and **1.26** for the league average; on 2025 alone it is 1.35 vs 1.98 and 1.47.
+Unlike the D/ST model it also ranks a little better than last season's finish (Spearman 0.20 vs 0.14),
+but kicker scoring is noisy and the margin over the league average is small. It projects scoring
+*when he kicks* and assumes the kicker stays on his season-t team. Full results:
+[`ml/reports/KICKER_REPORT.md`](ml/reports/KICKER_REPORT.md).
+
+```bash
+python -m ml.download                   # also fetches player stats back to 2002 for kicker history
+python -m ml.train_kicker               # writes analysis_core/artifacts/kicker_projection.joblib + ml/reports/KICKER_REPORT.md
+```
+
+Served, fallen back, and tracked (`kicker-projection`) the same way as the other models.
 
 ---
 
@@ -359,6 +387,7 @@ analysis-service-down demo, and teardown.
 | `PUBLIC_URL` | Optional. Absolute site URL used in link previews (`og:url`, `og:image`); default `https://fantasy-football-draft-consultant.com` |
 | `PROJECTION_MODEL_PATH` | Optional. Path to the projection model artifact (default `analysis_core/artifacts/ppr_projection.joblib`) |
 | `DST_PROJECTION_MODEL_PATH` | Optional. Path to the D/ST projection artifact (default `analysis_core/artifacts/dst_projection.joblib`) |
+| `KICKER_PROJECTION_MODEL_PATH` | Optional. Path to the kicker projection artifact (default `analysis_core/artifacts/kicker_projection.joblib`) |
 | `RAG_DATABASE_URL` | Optional. Postgres (with pgvector) holding the retrieval collection; unset disables retrieval. On the analysis service in `http` mode, on core in `inprocess` mode |
 | `FASTEMBED_CACHE_PATH` | Optional. Where the embedding model is cached (the Docker images bake it into `/app/.fastembed`) |
 
@@ -478,20 +507,23 @@ fantasy-draft-consultant/
 │   ├── season.py                   # season calendar (rolls over May 1, after the NFL Draft)
 │   ├── anthropic_client.py         # the Claude agent (web_search, retry, prompt hardening)
 │   ├── contract.py                 # wire schemas + HMAC actor-token helpers
-│   ├── projection.py               # serves the PPR and D/ST projection models (lookup, fallbacks)
+│   ├── projection.py               # serves the PPR, D/ST, and kicker projection models (lookup, fallbacks)
 │   ├── teams.py                    # NFL teams; recognizes a D/ST in a typed name
 │   ├── retrieval.py                # RAG: fastembed + LangChain PGVector injury-history search
-│   └── artifacts/                  # ppr_projection.joblib, dst_projection.joblib (model + latest-season features)
+│   └── artifacts/                  # ppr_, dst_, kicker_projection.joblib (model + latest-season features)
 │
 ├── ml/                             # Offline training (not deployed)
 │   ├── download.py                 # nflverse CSVs -> ml/data/raw/ (gitignored)
 │   ├── features.py                 # feature engineering (no future-season leakage)
 │   ├── train.py                    # season-based split, model selection, export
 │   ├── dst_features.py             # D/ST scoring + team-season features (incl. next-season schedule)
-│   ├── train_dst.py                # D/ST model: rolling validation, backtest, export
+│   ├── train_dst.py                # D/ST model: features in, artifact + report out
+│   ├── kicker_features.py          # kicker scoring + kicker-season features (incl. next-season schedule)
+│   ├── train_kicker.py             # kicker model: features in, artifact + report out
+│   ├── rolling.py                  # shared by D/ST + kicker: rolling validation, backtest, baselines
 │   ├── tracking.py                 # MLflow runs + model registry (optional)
 │   ├── rag/                        # retrieval corpus: documents.py, index.py, evaluate.py
-│   └── reports/                    # REPORT.md, DST_REPORT.md, RAG_REPORT.md + their metrics JSON
+│   └── reports/                    # REPORT.md, DST_REPORT.md, KICKER_REPORT.md, RAG_REPORT.md + metrics JSON
 │
 ├── app/                            # Core service
 │   ├── __init__.py                 # app factory; selects the analysis client
