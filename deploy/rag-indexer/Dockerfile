@@ -21,4 +21,4 @@ COPY analysis_core/ analysis_core/
 COPY ml/ ml/
 
 # RAG_DATABASE_URL must be set (the ECS task builds it from the RDS secret).
-CMD ["sh", "-c", "python -m ml.download && python -m ml.rag.index"]
+CMD ["sh", "-c", "python -m ml.download --rag-only && python -m ml.rag.index"]

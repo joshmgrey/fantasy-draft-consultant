@@ -39,8 +39,21 @@ PLAYERS_URL = f"{BASE}/players/players.csv"
 # Every game's final score, plus upcoming schedules (published each May).
 GAMES_URL = f"{BASE}/schedules/games.csv"
 
-# The D/ST model has one row per team-season, so it reaches further back.
+# The D/ST and kicker models have few rows per season (32 teams, ~37
+# kickers), so their history reaches further back.
 TEAM_FIRST = 2002
+
+
+def raw_file(raw_dir: Path, name: str) -> Path:
+    """Path to a downloaded file, or FileNotFoundError saying how to get it."""
+    path = Path(raw_dir) / name
+    if not path.exists():
+        hint = (f"Run `python -m ml.download` without --rag-only (it fetches team stats "
+                f"and player stats back to {TEAM_FIRST} for the D/ST and kicker models)")
+        if name.startswith(("stats_player_reg_", "stats_team_week_")):
+            hint += ", or train with a later --first"
+        raise FileNotFoundError(f"{path} is missing. {hint}.")
+    return path
 
 
 def fetch(url: str, dest: Path) -> None:
@@ -57,8 +70,12 @@ def main(argv=None) -> None:
     # current fantasy season.
     parser.add_argument("--last", type=int, default=current_season() - 1)
     parser.add_argument("--team-first", type=int, default=TEAM_FIRST,
-                        help="first season of team stats for the D/ST model")
+                        help="first season of team stats (D/ST model) and of player "
+                             "stats for the kicker model")
     parser.add_argument("--out", type=Path, default=RAW_DIR)
+    parser.add_argument("--rag-only", action="store_true",
+                        help="only the files retrieval indexes (player stats, injuries, "
+                             "snap counts, players); skip the D/ST and kicker training data")
     args = parser.parse_args(argv)
 
     for season in range(args.first, args.last + 1):
@@ -67,11 +84,20 @@ def main(argv=None) -> None:
         fetch(injuries_url(season), args.out / f"injuries_{season}.csv")
         fetch(snap_counts_url(season), args.out / f"snap_counts_{season}.csv")
         print(f"stats, injuries, snap counts {season}")
+    if args.rag_only:
+        fetch(PLAYERS_URL, args.out / "players.csv")
+        print("players")
+        return
     # D/ST model (ml/train_dst.py): per-game team box scores and scores.
     team_first = min(args.team_first, args.first)
     for season in range(team_first, args.last + 1):
         fetch(team_weeks_url(season), args.out / f"stats_team_week_{season}.csv")
     print(f"team stats {team_first}-{args.last}")
+    # Kicker model (ml/train_kicker.py): older player stats for more kicker history.
+    for season in range(team_first, args.first):
+        fetch(stats_url(season), args.out / f"stats_player_reg_{season}.csv")
+    if team_first < args.first:
+        print(f"player stats {team_first}-{args.first - 1} (kicker history)")
     fetch(GAMES_URL, args.out / "games.csv")
     fetch(PLAYERS_URL, args.out / "players.csv")
     print("games, players")

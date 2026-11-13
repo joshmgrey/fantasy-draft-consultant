@@ -10,7 +10,8 @@ class PlayerVerdict:
     reason: Optional[str]
     # The in-house model's points-per-game projection for the season, when it
     # has one for this player (see analysis_core/projection.py), and which
-    # scoring it is in: "PPR" for a player, "D/ST" for a team defense.
+    # scoring it is in: "PPR" for a skill player, "K" for a kicker, "D/ST" for a
+    # team defense.
     projected_ppg: Optional[float] = None
     projection_scoring: Optional[str] = None
 

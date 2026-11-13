@@ -20,41 +20,10 @@ from analysis_core.projection import (
 )
 from app.analysis.client.base import Actor
 from app.analysis.client.inprocess import InProcessAnalysisClient
+from tests.helpers import player_artifact as _artifact
 
 N_FEATURES = 3
 CLEAN = "RISK: 3/10\nVERDICT: Draft\nREASON: Fine value."
-
-
-def _artifact(players=None, **overrides):
-    # y = sum(features): easy to predict by hand.
-    X = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]], dtype=float)
-    model = LinearRegression().fit(X, X.sum(axis=1))
-    art = {
-        "format": ARTIFACT_FORMAT,
-        "model": model,
-        "features": ["a", "b", "c"],
-        "sklearn_version": sklearn.__version__,
-        "feature_season": current_season() - 1,
-        "target_season": current_season(),
-        "model_name": "linear",
-        "test_mae": 2.4,
-        "players": players if players is not None else {
-            "kenneth walker": {
-                "name": "Kenneth Walker III", "position": "RB", "team": "SEA",
-                "ppg": 11.29, "games": 17, "features": [10.0, 2.0, 0.5],
-            },
-            "jamarr chase": {
-                "name": "Ja'Marr Chase", "position": "WR", "team": "CIN",
-                "ppg": 19.6, "games": 16, "features": [15.0, None, 3.0],
-            },
-            "negative guy": {
-                "name": "Negative Guy", "position": "TE", "team": "KC",
-                "ppg": 1.0, "games": 5, "features": [-9.0, -9.0, -9.0],
-            },
-        },
-    }
-    art.update(overrides)
-    return art
 
 
 @pytest.fixture

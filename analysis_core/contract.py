@@ -93,6 +93,14 @@ def _require(cond: bool, message: str) -> None:
         raise ContractError(message)
 
 
+def _scoring(value: Any) -> Optional[str]:
+    """A known label, or null. A label this version doesn't know (from a newer
+    analysis service) degrades to null rather than failing the whole response;
+    a non-string is still malformed."""
+    value = _opt_str(value, "projection_scoring")
+    return value if value in PROJECTION_SCORINGS else None
+
+
 def _opt_str(value: Any, field: str) -> Optional[str]:
     _require(value is None or isinstance(value, str), f"{field} must be a string or null")
     return value
@@ -119,6 +127,10 @@ class AnalyzeRequest:
         return cls(player_name=name, request_id=_opt_str(data.get("request_id"), "request_id"))
 
 
+# The values projection_scoring may take (besides null).
+PROJECTION_SCORINGS = ("PPR", "K", "D/ST")
+
+
 @dataclass(frozen=True)
 class AnalyzeResponse:
     player: str
@@ -131,7 +143,7 @@ class AnalyzeResponse:
     # Added in v1 as an optional field: older services omit it, and readers
     # treat a missing key as null.
     projected_ppg: Optional[float] = None
-    # Optional too: "PPR" or "D/ST", the scoring projected_ppg is in.
+    # Optional too: "PPR", "K", or "D/ST", the scoring projected_ppg is in.
     projection_scoring: Optional[str] = None
 
     def to_wire(self) -> dict:
@@ -172,7 +184,7 @@ class AnalyzeResponse:
             notice=_opt_str(data.get("notice"), "notice"),
             analysis_id=_opt_str(data.get("analysis_id"), "analysis_id"),
             projected_ppg=None if projected is None else float(projected),
-            projection_scoring=_opt_str(data.get("projection_scoring"), "projection_scoring"),
+            projection_scoring=_scoring(data.get("projection_scoring")),
         )
 
     @classmethod

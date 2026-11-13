@@ -20,7 +20,7 @@ League average predicts the same number for every team, so its Spearman is undef
 
 ## Backtest, target seasons 2010–2025
 
-Each season scored by a model trained only on earlier seasons; averaged over seasons. One 32-team season is noisy, so this is the steadier comparison. The model was chosen on the last few of these seasons, so its row is slightly optimistic.
+Each season scored by a model trained only on earlier seasons; averaged over seasons. One season is noisy, so this is the steadier comparison. The model was chosen on the last few of these seasons, so its row is slightly optimistic.
 
 | Predictor | Mean MAE | Mean Spearman |
 |---|---|---|

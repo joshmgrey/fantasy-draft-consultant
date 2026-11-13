@@ -106,7 +106,8 @@ When evaluating a player, you MUST:
 
 The request may include a <model_projection trust_level="trusted"> block: the
 points-per-game projection from our own statistical model, built only from past stats
-(PPR scoring for a player, standard D/ST scoring for a team defense).
+(PPR scoring for a skill player, standard kicker scoring for a kicker, standard D/ST
+scoring for a team defense).
 Use it as one input. Where current news (a trade, a new role, an injury) changes the
 picture, trust the news over the model.
 

@@ -1,6 +1,6 @@
 """Serve the trained next-season projection models.
 
-Two models, each trained offline (see ``ml/``) and exported as one joblib
+Three models, each trained offline (see ``ml/``) and exported as one joblib
 artifact holding the fitted scikit-learn estimator, the feature order, and the
 latest season's feature rows:
 
@@ -9,6 +9,8 @@ latest season's feature rows:
 * D/ST fantasy points per game (``python -m ml.train_dst``), keyed by team
   abbreviation; a typed name like "Steelers D/ST" is routed here by
   :func:`analysis_core.teams.resolve_dst`
+* kicker fantasy points per game (``python -m ml.train_kicker``), keyed by
+  normalized name; asked only when the player model doesn't know the name
 
 Serving is a dictionary lookup plus one ``predict`` call — no pandas, no network.
 
@@ -16,7 +18,7 @@ The projection is optional by design. If the artifact is missing, was built
 with a different scikit-learn version, or has no row for the player (a rookie,
 or someone with too few games), :meth:`Projector.project` returns ``None`` and
 the analysis runs exactly as it did before the model existed. The same holds
-for the D/ST artifact.
+for the D/ST and kicker artifacts.
 """
 
 from __future__ import annotations
@@ -43,6 +45,32 @@ DST_ARTIFACT_FORMAT = "dst-ppg-projection/1"
 DEFAULT_DST_ARTIFACT_PATH = Path(__file__).parent / "artifacts" / "dst_projection.joblib"
 DST_ARTIFACT_ENV = "DST_PROJECTION_MODEL_PATH"
 DST_POSITION = "D/ST"
+
+KICKER_ARTIFACT_FORMAT = "kicker-ppg-projection/1"
+DEFAULT_KICKER_ARTIFACT_PATH = Path(__file__).parent / "artifacts" / "kicker_projection.joblib"
+KICKER_ARTIFACT_ENV = "KICKER_PROJECTION_MODEL_PATH"
+KICKER_POSITION = "K"
+
+# What prompt_block calls each model's points, and what it can't see.
+_UNITS = {
+    DST_POSITION: (
+        "standard D/ST fantasy points",
+        "The model only sees past team stats and next season's schedule: it does not "
+        "know about free agency, the draft, coaching changes, or injuries, so weigh it "
+        "against current news.",
+    ),
+    KICKER_POSITION: (
+        "standard kicker fantasy points",
+        "The model only sees past kicking stats and the team's offense and next-season "
+        "schedule: it does not know about signings, cuts, or a new team, so weigh it "
+        "against current news.",
+    ),
+}
+_PPR_UNIT = (
+    "PPR points",
+    "The model only sees past stats: it does not know about offseason moves, "
+    "depth-chart changes, or injuries, so weigh it against current news.",
+)
 
 _SUFFIX_RE = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
 _NON_ALPHA_RE = re.compile(r"[^a-z ]+")
@@ -73,27 +101,14 @@ class Projection:
     typical_error: float   # test-season MAE, in points per game
 
     @property
-    def is_dst(self) -> bool:
-        return self.position == DST_POSITION
-
-    @property
     def scoring(self) -> str:
-        """The scoring ``projected_ppg`` is in: "D/ST" or "PPR"."""
-        return DST_POSITION if self.is_dst else "PPR"
+        """The scoring ``projected_ppg`` is in: "D/ST", "K", or "PPR"."""
+        return self.position if self.position in _UNITS else "PPR"
 
     def prompt_block(self) -> str:
         """Trusted context for the LLM. Built from our own model output and
         stats fields, never from user input or retrieved web content."""
-        if self.is_dst:
-            unit = "standard D/ST fantasy points"
-            caveat = ("The model only sees past team stats and next season's schedule: "
-                      "it does not know about free agency, the draft, coaching changes, "
-                      "or injuries, so weigh it against current news.")
-        else:
-            unit = "PPR points"
-            caveat = ("The model only sees past stats: it does not know about offseason "
-                      "moves, depth-chart changes, or injuries, so weigh it against "
-                      "current news.")
+        unit, caveat = _UNITS.get(self.position, _PPR_UNIT)
         return (
             '<model_projection trust_level="trusted">\n'
             f"In-house statistical model (scikit-learn, trained on past NFL box scores): "
@@ -176,7 +191,9 @@ _projectors: dict = {}
 _ARTIFACTS = {
     "player": (ARTIFACT_ENV, DEFAULT_ARTIFACT_PATH, ARTIFACT_FORMAT),
     "dst": (DST_ARTIFACT_ENV, DEFAULT_DST_ARTIFACT_PATH, DST_ARTIFACT_FORMAT),
+    "kicker": (KICKER_ARTIFACT_ENV, DEFAULT_KICKER_ARTIFACT_PATH, KICKER_ARTIFACT_FORMAT),
 }
+_TRAIN_COMMANDS = {"player": "ml.train", "dst": "ml.train_dst", "kicker": "ml.train_kicker"}
 
 
 def _get(kind: str) -> Optional[Projector]:
@@ -194,12 +211,27 @@ def get_projector() -> Optional[Projector]:
     return _get("player")
 
 
-def get_dst_projector() -> Optional[Projector]:
-    """Process-wide D/ST projector, loaded once on first use."""
-    return _get("dst")
-
-
 _stale_warned: set = set()
+
+
+def _current(kind: str) -> Optional[Projector]:
+    """The ``kind`` projector, or ``None`` if it is missing or was built for
+    an earlier season (warned once per kind and season)."""
+    projector = _get(kind)
+    if projector is None:
+        return None
+    season = current_season()
+    if projector.season != season:
+        if (kind, projector.season) not in _stale_warned:
+            _stale_warned.add((kind, projector.season))
+            log.warning(
+                "%s projection model targets the %s season but it is now %s; "
+                "retrain with `python -m ml.download && python -m %s`. "
+                "Projections disabled.",
+                kind, projector.season, season, _TRAIN_COMMANDS[kind],
+            )
+        return None
+    return projector
 
 
 def project_player(player_name: str) -> Optional[Projection]:
@@ -207,7 +239,8 @@ def project_player(player_name: str) -> Optional[Projection]:
     an enhancement, and a failure here must not break the analysis.
 
     A team defense ("Steelers D/ST", "49ers Defense") is projected by the D/ST
-    model; anything else by the player model.
+    model; anything else by the player model, then by the kicker model if the
+    player model doesn't know the name.
 
     Only serves an artifact built for the *current* fantasy season. Checked on
     every call rather than at load time, so a process that is running when the
@@ -215,21 +248,15 @@ def project_player(player_name: str) -> Optional[Projection]:
     """
     try:
         team = resolve_dst(player_name)
-        projector = get_dst_projector() if team else get_projector()
-        if projector is None:
-            return None
-        season = current_season()
-        if projector.season != season:
-            if projector.season not in _stale_warned:
-                _stale_warned.add(projector.season)
-                log.warning(
-                    "projection model targets the %s season but it is now %s; "
-                    "retrain with `python -m ml.download && python -m ml.train`. "
-                    "Projections disabled.",
-                    projector.season, season,
-                )
-            return None
-        return projector.project_key(team) if team else projector.project(player_name)
+        if team:
+            dst = _current("dst")
+            return dst.project_key(team) if dst else None
+        for kind in ("player", "kicker"):
+            projector = _current(kind)
+            found = projector.project(player_name) if projector else None
+            if found is not None:
+                return found
+        return None
     except Exception:
         log.exception("projection failed for %r", player_name)
         return None
