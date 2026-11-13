@@ -2,7 +2,7 @@
 
 An AI-powered draft assistant that researches players in real time and delivers instant Draft/Pass verdicts during your fantasy football draft.
 
-Built with Claude Opus 4.7 and live web search — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
+Built with Claude Opus 4.7, live web search, a scikit-learn projection model, and RAG over 14 seasons of injury history — type a player name, get a risk score, recommendation, and one-sentence justification in seconds.
 
 [![CI](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/ci.yml) [![Deploy](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/deploy-aws.yml/badge.svg?branch=main)](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/deploy-aws.yml) [![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/joshmgrey/fantasy-draft-consultant/badges/tests.json)](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/ci.yml) [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/joshmgrey/fantasy-draft-consultant/badges/coverage.json)](https://github.com/joshmgrey/fantasy-draft-consultant/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/Python-3.12-blue) ![Flask](https://img.shields.io/badge/Flask-3.0-lightgrey) ![Claude](https://img.shields.io/badge/Claude-Opus%204.7-orange)
 
