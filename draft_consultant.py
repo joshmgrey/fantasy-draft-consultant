@@ -19,8 +19,9 @@ if not _api_key:
 
 client = anthropic.Anthropic(api_key=_api_key)
 
-# Only letters, spaces, apostrophes, hyphens, and periods (e.g. "D.K. Metcalf", "Ja'Marr Chase")
-_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
+# Letters, digits, spaces, apostrophes, hyphens, periods, and slashes
+# (e.g. "D.K. Metcalf", "Ja'Marr Chase", "49ers D/ST")
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-\./]{0,48}$")
 _MAX_NAME_LEN = 50
 
 
@@ -34,7 +35,7 @@ def _validate_player_name(name: str) -> str:
     if not _NAME_RE.match(name):
         raise ValueError(
             "Player name contains invalid characters. "
-            "Use letters, spaces, apostrophes, hyphens, or periods only."
+            "Use letters, digits, spaces, apostrophes, hyphens, periods, or slashes only."
         )
     return name
 

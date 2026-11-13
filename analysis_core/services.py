@@ -1,7 +1,7 @@
 import re
 from .models import PlayerVerdict
 
-_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 '\-\./]{0,48}$")
 _MAX_NAME_LEN = 50
 _TAG_RE = re.compile(r"<[^>]+>")
 
@@ -15,7 +15,7 @@ def validate_player_name(name: str) -> str:
     if not _NAME_RE.match(name):
         raise ValueError(
             "Player name contains invalid characters. "
-            "Use letters, spaces, apostrophes, hyphens, or periods only."
+            "Use letters, digits, spaces, apostrophes, hyphens, periods, or slashes only."
         )
     return name
 
