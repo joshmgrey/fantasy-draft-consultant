@@ -106,8 +106,17 @@ def test_projection_scoring_round_trips_and_is_optional():
     assert AnalyzeResponse.from_wire(wire).projection_scoring is None
 
 
-@pytest.mark.parametrize("bad", ["KICKER", "DST", "", 1])
-def test_analyze_response_rejects_unknown_projection_scoring(bad):
+@pytest.mark.parametrize("unknown", ["IDP", "DST", ""])
+def test_unknown_projection_scoring_degrades_to_null(unknown):
+    # A newer analysis service may send a label this core doesn't know yet;
+    # the verdict must still come through.
+    resp = AnalyzeResponse.from_wire(
+        {"player": "x", "verdict": "Draft", "projection_scoring": unknown})
+    assert resp.projection_scoring is None and resp.verdict == "Draft"
+
+
+@pytest.mark.parametrize("bad", [1, ["K"]])
+def test_non_string_projection_scoring_is_rejected(bad):
     with pytest.raises(ContractError):
         AnalyzeResponse.from_wire({"player": "x", "projection_scoring": bad})
 

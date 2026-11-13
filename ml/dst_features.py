@@ -96,27 +96,40 @@ _GAME_COLUMNS = ("season", "game_type", "week", "home_team", "away_team",
 _OPTIONAL_GAME_COLUMNS = ("roof", "stadium_id")
 
 
-def load_games(raw_dir: Path) -> pd.DataFrame:
+def load_games(raw_dir: Path, require: Iterable[str] = ()) -> pd.DataFrame:
+    """``games.csv`` with missing roofs filled (:func:`fill_roofs`). ``require``
+    names optional columns the caller can't do without (the kicker model needs
+    ``roof``; D/ST doesn't)."""
     wanted = {*_GAME_COLUMNS, *_OPTIONAL_GAME_COLUMNS}
     games = pd.read_csv(raw_file(raw_dir, "games.csv"), usecols=lambda c: c in wanted,
                         low_memory=False)
-    missing = [c for c in _GAME_COLUMNS if c not in games.columns]
+    missing = [c for c in (*_GAME_COLUMNS, *require) if c not in games.columns]
     if missing:
         raise ValueError(f"games.csv is missing expected columns: {missing}")
-    return games
+    return fill_roofs(games)
 
 
-def _roof(games: pd.DataFrame) -> pd.Series:
-    """Each game's roof; a missing one (upcoming games) takes the stadium's
-    most common recorded roof. NaN when neither is known."""
-    if "roof" not in games:
-        return pd.Series(np.nan, index=games.index)
-    roof = games["roof"]
-    if "stadium_id" in games and roof.isna().any():
-        usual = (games.dropna(subset=["roof", "stadium_id"])
-                 .groupby("stadium_id")["roof"].agg(lambda s: s.mode().iat[0]))
-        roof = roof.fillna(games["stadium_id"].map(usual))
-    return roof
+def fill_roofs(games: pd.DataFrame) -> pd.DataFrame:
+    """Fill a missing roof (an upcoming game) with the roof most often recorded
+    at that stadium in its latest *complete* season (every game's roof
+    recorded), so a retractable roof follows current practice, not a
+    decade-old one, and a season in progress (early games open, late games
+    still unrecorded) doesn't skew it. Falls back to the latest season with
+    any record; left NaN when the stadium has none."""
+    if "roof" not in games or "stadium_id" not in games or games["roof"].notna().all():
+        return games
+    complete = (games.dropna(subset=["stadium_id"])
+                .groupby(["stadium_id", "season"])["roof"].agg(lambda s: s.notna().all()))
+    known = games.dropna(subset=["roof", "stadium_id"]).copy()
+    known["complete"] = [complete.get((s, y), False)
+                         for s, y in zip(known["stadium_id"], known["season"])]
+    # Rank complete seasons above partial ones, then newest first.
+    order = known["complete"].astype(int) * 10_000 + known["season"]
+    latest = known[order == order.groupby(known["stadium_id"]).transform("max")]
+    usual = latest.groupby("stadium_id")["roof"].agg(lambda s: s.mode().iat[0])
+    out = games.copy()
+    out["roof"] = out["roof"].fillna(out["stadium_id"].map(usual))
+    return out
 
 
 def team_games(games: pd.DataFrame) -> pd.DataFrame:
@@ -125,7 +138,7 @@ def team_games(games: pd.DataFrame) -> pd.DataFrame:
     ``indoor`` is 1.0 for a dome or closed roof, 0.0 otherwise, and NaN when
     the roof is unknown (so a mean over a schedule skips it)."""
     reg = games[games["game_type"] == "REG"]
-    roof = _roof(games).loc[reg.index]
+    roof = reg["roof"] if "roof" in reg else pd.Series(np.nan, index=reg.index)
     indoor = roof.isin(INDOOR_ROOFS).astype(float).where(roof.notna())
     home = pd.DataFrame({
         "season": reg["season"], "week": reg["week"],

@@ -94,9 +94,11 @@ def _require(cond: bool, message: str) -> None:
 
 
 def _scoring(value: Any) -> Optional[str]:
-    _require(value is None or value in PROJECTION_SCORINGS,
-             f"projection_scoring must be one of {PROJECTION_SCORINGS} or null")
-    return value
+    """A known label, or null. A label this version doesn't know (from a newer
+    analysis service) degrades to null rather than failing the whole response;
+    a non-string is still malformed."""
+    value = _opt_str(value, "projection_scoring")
+    return value if value in PROJECTION_SCORINGS else None
 
 
 def _opt_str(value: Any, field: str) -> Optional[str]:

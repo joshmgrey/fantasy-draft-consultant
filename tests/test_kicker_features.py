@@ -220,10 +220,13 @@ def trained(tmp_path_factory):
     games.loc[games.season == 2020, ["home_score", "away_score"]] = np.nan
     games.to_csv(raw / "games.csv", index=False)
     # An incoming WR who shares kicker B's name: kicker B must not be served.
-    # An active TE who missed 2019 hurt shares kicker E's name: not served either.
+    # A TE on injured reserve all of 2019 shares kicker E's name: not served either.
     # A safety named like kicker C retired long ago: kicker C still is.
-    players_csv(extra=[("Kicker B", "WR", 2020, "ACT"), ("Kicker E", "TE", 2018, "ACT"),
-                       ("Kicker C", "SAF", 1994, "CUT")]).to_csv(raw / "players.csv", index=False)
+    # A 2005 RB still marked ACT (players.csv keeps stale statuses) shares
+    # kicker F's name: kicker F still is served.
+    players_csv(extra=[("Kicker B", "WR", 2020, "ACT"), ("Kicker E", "TE", 2018, "RES"),
+                       ("Kicker C", "SAF", 1994, "CUT"), ("Kicker F", "RB", 2005, "ACT")]).to_csv(
+        raw / "players.csv", index=False)
     out = root / "kicker.joblib"
     report = train_kicker.run(raw, 2008, 2019, out, root / "reports")
     return {"root": root, "out": out, "report": report}
@@ -246,7 +249,8 @@ def test_artifact_serves_kickers_by_name(trained):
     p = projector.project("kicker d")
     assert (p.player, p.position, p.team, p.scoring) == ("Kicker D", "K", "CIN", "K")
     assert projector.project("kicker b") is None  # also a current WR's name
-    assert projector.project("kicker e") is None  # an active TE who sat out 2019
+    assert projector.project("kicker e") is None  # a TE on IR all of 2019
+    assert projector.project("kicker f") is not None  # stale ACT from 2005
     assert projector.project("kicker c") is not None  # namesake retired in 1994
     assert len(projector._players) == len(TEAMS) - 2
     assert Projector.load(trained["out"]) is None  # not a player-model artifact
@@ -281,7 +285,7 @@ def test_unknown_roof_takes_the_stadium_roof_or_stays_unknown():
         {"season": 2021, "game_type": "REG", "week": 2, "home_team": "NE", "away_team": "ATL",
          "home_score": None, "away_score": None, "roof": None, "stadium_id": "NEW00"},
     ])
-    tg = D.team_games(games)
+    tg = D.team_games(D.fill_roofs(games))
     atl = tg[tg.team == "ATL"].set_index(["season", "week"])["indoor"]
     assert atl.loc[(2021, 1)] == 1.0          # filled from the stadium's other games
     assert np.isnan(atl.loc[(2021, 2)])       # no record anywhere: unknown, not outdoors
@@ -293,3 +297,40 @@ def test_games_csv_missing_a_required_column_is_an_error(tmp_path):
         tmp_path / "games.csv", index=False)
     with pytest.raises(ValueError, match="home_score"):
         D.load_games(tmp_path)
+
+
+def test_roof_fill_follows_the_stadiums_latest_season():
+    games = pd.DataFrame([
+        # Mostly closed years ago, open in the latest recorded season.
+        *[{"season": 2010, "game_type": "REG", "week": w, "home_team": "HOU", "away_team": "TEN",
+           "home_score": 20, "away_score": 17, "roof": "closed", "stadium_id": "HOU00"}
+          for w in range(1, 6)],
+        *[{"season": 2025, "game_type": "REG", "week": w, "home_team": "HOU", "away_team": "TEN",
+           "home_score": 20, "away_score": 17, "roof": "open", "stadium_id": "HOU00"}
+          for w in range(1, 3)],
+        {"season": 2026, "game_type": "REG", "week": 1, "home_team": "HOU", "away_team": "TEN",
+         "home_score": None, "away_score": None, "roof": None, "stadium_id": "HOU00"},
+    ])
+    assert D.fill_roofs(games)["roof"].iloc[-1] == "open"
+
+
+def test_roof_fill_ignores_a_season_in_progress():
+    # 2025 complete and closed; 2026 under way, early games open, rest unknown.
+    rows = [{"season": 2025, "game_type": "REG", "week": w, "home_team": "IND",
+             "away_team": "TEN", "home_score": 20, "away_score": 17, "roof": "closed",
+             "stadium_id": "IND00"} for w in range(1, 5)]
+    rows += [{"season": 2026, "game_type": "REG", "week": w, "home_team": "IND",
+              "away_team": "TEN", "home_score": 20 if w < 4 else None,
+              "away_score": 17 if w < 4 else None, "roof": "open" if w < 4 else None,
+              "stadium_id": "IND00"} for w in range(1, 7)]
+    filled = D.fill_roofs(pd.DataFrame(rows))
+    assert filled["roof"].iloc[-3:].tolist() == ["closed"] * 3
+
+
+def test_kicker_loader_requires_the_roof(tmp_path):
+    pd.DataFrame([{"season": 2020, "game_type": "REG", "week": 1, "home_team": "PIT",
+                   "away_team": "LV", "home_score": 3, "away_score": 0}]).to_csv(
+        tmp_path / "games.csv", index=False)
+    assert "roof" not in D.load_games(tmp_path).columns   # D/ST: fine without it
+    with pytest.raises(ValueError, match="roof"):
+        D.load_games(tmp_path, require=("roof",))

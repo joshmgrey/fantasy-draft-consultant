@@ -47,6 +47,8 @@ EXPERIMENT = "kicker-projection"
 
 
 _BIO_COLUMNS = ["gsis_id", "birth_date", "rookie_season"]
+# players.csv statuses for someone no longer on any roster.
+_OFF_ROSTER = ("CUT", "RET", "RLS")
 
 
 def load_people(raw_dir: Path) -> pd.DataFrame:
@@ -57,11 +59,16 @@ def load_people(raw_dir: Path) -> pd.DataFrame:
 
 
 def non_kicker_names(people: pd.DataFrame, feature_season: int) -> set:
-    """Normalized names of current non-kickers: on an active roster (which
-    covers someone who sat out ``feature_season`` injured) or with a season in
-    ``feature_season`` or later (incoming rookies). Long-retired namesakes
-    don't count: nobody types their name into a draft tool today."""
-    current = (people["status"] == "ACT") | (people["last_season"] >= feature_season)
+    """Normalized names of current non-kickers: anyone with a season in
+    ``feature_season`` or later (incoming rookies included), plus anyone still
+    on a roster (active, injured reserve, PUP, suspended, ...) whose last season
+    was the one before, i.e. who sat ``feature_season`` out. ``status`` alone
+    isn't enough: players.csv still marks thousands of long-gone players ACT.
+    Long-retired namesakes don't count: nobody types their name into a draft
+    tool today."""
+    on_roster = people["status"].notna() & ~people["status"].isin(_OFF_ROSTER)
+    current = (people["last_season"] >= feature_season) | (
+        on_roster & (people["last_season"] >= feature_season - 1))
     recent = people[(people["position"] != "K") & current]
     return set(recent["display_name"].dropna().map(normalize_name))
 
@@ -99,7 +106,7 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path,
 def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
     stats = K.load_kicking(raw_dir, range(first, last + 1))
     people = load_people(raw_dir)
-    rows = K.season_rows(stats, people[_BIO_COLUMNS], load_games(raw_dir))
+    rows = K.season_rows(stats, people[_BIO_COLUMNS], load_games(raw_dir, require=("roof",)))
     table = K.training_table(rows)
 
     tracker.log_params({
