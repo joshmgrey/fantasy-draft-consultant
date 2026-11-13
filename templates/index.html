@@ -520,8 +520,9 @@
       if (typeof d.projected_ppg === 'number') {
         document.getElementById('resultProjection').textContent =
           d.projected_ppg.toFixed(1) +
-          ({'D/ST': ' D/ST fantasy points', 'K': ' kicker fantasy points'}[d.projection_scoring]
-            || ' PPR points') +
+          ({'PPR': ' PPR points', 'D/ST': ' D/ST fantasy points',
+            'K': ' kicker fantasy points'}[d.projection_scoring]
+            || ' fantasy points') +
           ' per game (stats-only model)';
         projSection.style.display = '';
       } else {

@@ -97,35 +97,34 @@ _OPTIONAL_GAME_COLUMNS = ("roof", "stadium_id")
 
 
 def load_games(raw_dir: Path, require: Iterable[str] = ()) -> pd.DataFrame:
-    """``games.csv`` with missing roofs filled (:func:`fill_roofs`). ``require``
-    names optional columns the caller can't do without (the kicker model needs
-    ``roof``; D/ST doesn't)."""
+    """``games.csv``. ``require`` names optional columns the caller can't do
+    without; requiring ``roof`` (the kicker model; D/ST doesn't use it) also
+    fills missing roofs (:func:`fill_roofs`)."""
     wanted = {*_GAME_COLUMNS, *_OPTIONAL_GAME_COLUMNS}
     games = pd.read_csv(raw_file(raw_dir, "games.csv"), usecols=lambda c: c in wanted,
                         low_memory=False)
     missing = [c for c in (*_GAME_COLUMNS, *require) if c not in games.columns]
     if missing:
         raise ValueError(f"games.csv is missing expected columns: {missing}")
-    return fill_roofs(games)
+    return fill_roofs(games) if "roof" in require else games
 
 
 def fill_roofs(games: pd.DataFrame) -> pd.DataFrame:
     """Fill a missing roof (an upcoming game) with the roof most often recorded
     at that stadium in its latest *complete* season (every game's roof
     recorded), so a retractable roof follows current practice, not a
-    decade-old one, and a season in progress (early games open, late games
-    still unrecorded) doesn't skew it. Falls back to the latest season with
-    any record; left NaN when the stadium has none."""
+    decade-old one. A season in progress never counts (its early games are
+    open, its late ones unrecorded), so a stadium with no complete season yet,
+    such as a team's first year in a new building, stays NaN and is skipped."""
     if "roof" not in games or "stadium_id" not in games or games["roof"].notna().all():
         return games
     complete = (games.dropna(subset=["stadium_id"])
                 .groupby(["stadium_id", "season"])["roof"].agg(lambda s: s.notna().all()))
-    known = games.dropna(subset=["roof", "stadium_id"]).copy()
-    known["complete"] = [complete.get((s, y), False)
-                         for s, y in zip(known["stadium_id"], known["season"])]
-    # Rank complete seasons above partial ones, then newest first.
-    order = known["complete"].astype(int) * 10_000 + known["season"]
-    latest = known[order == order.groupby(known["stadium_id"]).transform("max")]
+    known = games.dropna(subset=["roof", "stadium_id"])
+    is_complete = [complete.get((s, y), False)
+                   for s, y in zip(known["stadium_id"], known["season"])]
+    known = known[is_complete]
+    latest = known[known["season"] == known.groupby("stadium_id")["season"].transform("max")]
     usual = latest.groupby("stadium_id")["roof"].agg(lambda s: s.mode().iat[0])
     out = games.copy()
     out["roof"] = out["roof"].fillna(out["stadium_id"].map(usual))

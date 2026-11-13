@@ -334,3 +334,24 @@ def test_kicker_loader_requires_the_roof(tmp_path):
     assert "roof" not in D.load_games(tmp_path).columns   # D/ST: fine without it
     with pytest.raises(ValueError, match="roof"):
         D.load_games(tmp_path, require=("roof",))
+
+
+def test_new_stadium_with_only_a_season_in_progress_stays_unknown():
+    rows = [{"season": 2026, "game_type": "REG", "week": w, "home_team": "TEN",
+             "away_team": "HOU", "home_score": 20 if w < 3 else None,
+             "away_score": 17 if w < 3 else None, "roof": "open" if w < 3 else None,
+             "stadium_id": "TEN99"} for w in range(1, 6)]
+    filled = D.fill_roofs(pd.DataFrame(rows))
+    assert filled["roof"].iloc[:2].tolist() == ["open", "open"]   # recorded games kept
+    assert filled["roof"].iloc[2:].isna().all()                   # not guessed as open
+
+
+def test_dst_loader_skips_the_roof_fill(tmp_path):
+    pd.DataFrame([
+        {"season": 2025, "game_type": "REG", "week": 1, "home_team": "IND", "away_team": "TEN",
+         "home_score": 20, "away_score": 17, "roof": "closed", "stadium_id": "IND00"},
+        {"season": 2026, "game_type": "REG", "week": 1, "home_team": "IND", "away_team": "TEN",
+         "home_score": None, "away_score": None, "roof": None, "stadium_id": "IND00"},
+    ]).to_csv(tmp_path / "games.csv", index=False)
+    assert D.load_games(tmp_path)["roof"].isna().sum() == 1             # D/ST: as read
+    assert D.load_games(tmp_path, require=("roof",))["roof"].notna().all()  # kicker: filled
