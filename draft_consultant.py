@@ -5,11 +5,14 @@ Usage: python draft_consultant.py "Player Name"
 """
 
 import os
-import re
 import sys
 import anthropic
 
+# The prompt, user message, and name validation are shared with the web app so
+# the CLI gets the same D/ST handling and trust-boundary hardening.
+from analysis_core.anthropic_client import SYSTEM_PROMPT, _build_user_content
 from analysis_core.season import current_season
+from analysis_core.services import validate_player_name as _validate_player_name
 
 _api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not _api_key:
@@ -19,46 +22,6 @@ if not _api_key:
 
 client = anthropic.Anthropic(api_key=_api_key)
 
-# Only letters, spaces, apostrophes, hyphens, and periods (e.g. "D.K. Metcalf", "Ja'Marr Chase")
-_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z '\-\.]{0,48}$")
-_MAX_NAME_LEN = 50
-
-
-def _validate_player_name(name: str) -> str:
-    """Return the cleaned name or raise ValueError."""
-    name = name.strip()
-    if not name:
-        raise ValueError("Player name cannot be empty.")
-    if len(name) > _MAX_NAME_LEN:
-        raise ValueError(f"Player name too long (max {_MAX_NAME_LEN} characters).")
-    if not _NAME_RE.match(name):
-        raise ValueError(
-            "Player name contains invalid characters. "
-            "Use letters, spaces, apostrophes, hyphens, or periods only."
-        )
-    return name
-
-SYSTEM_PROMPT = """You are an elite fantasy football analyst specializing in PPR drafts.
-Your edge is identifying VALUE OVER ADP — players whose projected output exceeds their draft cost.
-
-When evaluating a player, you MUST:
-1. Search for their PPR fantasy projections for the season named in the request
-   (points, position rank, ADP)
-2. Search for recent news (trades, depth chart changes, target share, snap counts)
-3. Search for injury history and current injury risk
-
-Then deliver a concise verdict:
-- RISK SCORE: 1–10 (1 = zero risk, 10 = extreme risk/injury-prone/situation unclear)
-- RECOMMENDATION: "Draft" or "Pass"
-- JUSTIFICATION: One sentence focusing on VALUE vs ADP (not just talent)
-
-Format your final answer EXACTLY as:
-RISK: <number>/10
-VERDICT: <Draft|Pass>
-REASON: <one sentence>
-
-Be direct. No preamble. No lengthy analysis. Just the three lines above."""
-
 TOOLS = [
     {"type": "web_search_20260209", "name": "web_search"},
 ]
@@ -67,18 +30,7 @@ TOOLS = [
 def analyze_player(player_name: str) -> dict:
     """Run the draft consultant agent for a single player."""
     player_name = _validate_player_name(player_name)
-    season = current_season()
-
-    messages = [
-        {
-            "role": "user",
-            "content": (
-                f"Analyze the player named <player>{player_name}</player> for a {season} PPR fantasy football draft. "
-                f"Search for their {season} projections, ADP, recent news, and injury risk, "
-                "then give me your Risk Score, Verdict, and Reason."
-            ),
-        }
-    ]
+    messages = [{"role": "user", "content": _build_user_content(player_name, None)}]
 
     print(f"\n🔍  Researching {player_name}", end="", flush=True)
 

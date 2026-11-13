@@ -19,6 +19,11 @@ def test_validate_apostrophe():
     assert validate_player_name("Ja'Marr Chase") == "Ja'Marr Chase"
 
 
+@pytest.mark.parametrize("name", ["Steelers D/ST", "49ers D/ST", "SF DST", "Bills DEF"])
+def test_validate_accepts_team_defense_names(name):
+    assert validate_player_name(name) == name
+
+
 def test_validate_empty_raises():
     with pytest.raises(ValueError, match="empty"):
         validate_player_name("")
