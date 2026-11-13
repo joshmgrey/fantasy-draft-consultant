@@ -23,3 +23,12 @@ def test_dst_text_does_not_trip_the_leak_guard():
     # words like "streamable" or "schedule" must not be withheld.
     answer = "RISK: 4/10\nVERDICT: Pass\nREASON: Strong pass rush but streamable at its ADP."
     assert not ac._looks_like_prompt_leak(answer)
+
+
+def test_cli_uses_the_shared_prompt_and_validator(monkeypatch):
+    # The CLI used to carry its own player-only prompt; it must reuse the shared one.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    import draft_consultant
+
+    assert draft_consultant.SYSTEM_PROMPT is ac.SYSTEM_PROMPT
+    assert draft_consultant._validate_player_name("49ers D/ST") == "49ers D/ST"
