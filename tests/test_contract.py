@@ -106,6 +106,12 @@ def test_projection_scoring_round_trips_and_is_optional():
     assert AnalyzeResponse.from_wire(wire).projection_scoring is None
 
 
+@pytest.mark.parametrize("bad", ["KICKER", "DST", "", 1])
+def test_analyze_response_rejects_unknown_projection_scoring(bad):
+    with pytest.raises(ContractError):
+        AnalyzeResponse.from_wire({"player": "x", "projection_scoring": bad})
+
+
 @pytest.mark.parametrize("bad", ["18.1", True, [18.1]])
 def test_analyze_response_rejects_non_numeric_projection(bad):
     with pytest.raises(ContractError):

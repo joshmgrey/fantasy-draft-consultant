@@ -81,17 +81,19 @@ def load_kicking(raw_dir: Path, seasons: Iterable[int]) -> pd.DataFrame:
 def blocked_by_distance(blocked_list: pd.Series) -> tuple[pd.Series, pd.Series]:
     """Blocked field goals at 40–49 and at 50+ yards, from ``fg_blocked_list``.
     Tokens that aren't numbers are ignored rather than failing training."""
-    def distances(text):
-        if not isinstance(text, str):
-            return []
-        values = pd.to_numeric(pd.Series(text.split(";")).str.strip(), errors="coerce")
-        return values.dropna().tolist()
+    def counts(text):
+        mid = long = 0
+        for token in text.split(";") if isinstance(text, str) else ():
+            try:
+                yards = float(token)
+            except ValueError:
+                continue
+            mid += 40 <= yards < 50
+            long += yards >= 50
+        return mid, long
 
-    def count(text, lo, hi):
-        return sum(lo <= d < hi for d in distances(text))
-
-    return (blocked_list.map(lambda t: count(t, 40, 50)),
-            blocked_list.map(lambda t: count(t, 50, 1000)))
+    parsed = blocked_list.map(counts)
+    return parsed.str[0].astype(int), parsed.str[1].astype(int)
 
 
 def fantasy_points(df: pd.DataFrame) -> pd.Series:

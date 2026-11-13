@@ -93,6 +93,12 @@ def _require(cond: bool, message: str) -> None:
         raise ContractError(message)
 
 
+def _scoring(value: Any) -> Optional[str]:
+    _require(value is None or value in PROJECTION_SCORINGS,
+             f"projection_scoring must be one of {PROJECTION_SCORINGS} or null")
+    return value
+
+
 def _opt_str(value: Any, field: str) -> Optional[str]:
     _require(value is None or isinstance(value, str), f"{field} must be a string or null")
     return value
@@ -117,6 +123,10 @@ class AnalyzeRequest:
         # produce ErrorCode.INVALID_PLAYER_NAME, not MALFORMED_REQUEST.
         _require(isinstance(name, str), "player_name must be a string")
         return cls(player_name=name, request_id=_opt_str(data.get("request_id"), "request_id"))
+
+
+# The values projection_scoring may take (besides null).
+PROJECTION_SCORINGS = ("PPR", "K", "D/ST")
 
 
 @dataclass(frozen=True)
@@ -172,7 +182,7 @@ class AnalyzeResponse:
             notice=_opt_str(data.get("notice"), "notice"),
             analysis_id=_opt_str(data.get("analysis_id"), "analysis_id"),
             projected_ppg=None if projected is None else float(projected),
-            projection_scoring=_opt_str(data.get("projection_scoring"), "projection_scoring"),
+            projection_scoring=_scoring(data.get("projection_scoring")),
         )
 
     @classmethod

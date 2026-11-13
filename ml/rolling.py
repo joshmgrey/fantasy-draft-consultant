@@ -171,9 +171,11 @@ def render_results(r: dict, unit: str) -> list[str]:
     imp = r["test_mae_improvement_pct"]
     v0, v1 = r["split"]["validation_target_seasons"]
 
+    def rank(value):
+        return "—" if value is None else value
+
     def row(label, m):
-        rank = "—" if m["spearman"] is None else m["spearman"]
-        return f"| {label} | {m['n']} | {m['mae']} | {m['rmse']} | {rank} |"
+        return f"| {label} | {m['n']} | {m['mae']} | {m['rmse']} | {rank(m['spearman'])} |"
 
     lines = [
         f"**Chosen model:** `{r['chosen_model']}` (lowest mean MAE over validation "
@@ -202,9 +204,9 @@ def render_results(r: dict, unit: str) -> list[str]:
         "",
         "| Predictor | Mean MAE | Mean Spearman |",
         "|---|---|---|",
-        f"| model | {b['model']['mae']} | {b['model']['spearman']} |",
+        f"| model | {b['model']['mae']} | {rank(b['model']['spearman'])} |",
         f"| baseline · last season | {b['baseline_last_season']['mae']} | "
-        f"{b['baseline_last_season']['spearman']} |",
+        f"{rank(b['baseline_last_season']['spearman'])} |",
         f"| baseline · league average | {b['baseline_league_average']['mae']} | — |",
         "",
         f"## Validation leaderboard (mean MAE, target seasons {v0}–{v1})",

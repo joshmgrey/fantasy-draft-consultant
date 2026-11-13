@@ -52,15 +52,17 @@ _BIO_COLUMNS = ["gsis_id", "birth_date", "rookie_season"]
 def load_people(raw_dir: Path) -> pd.DataFrame:
     """``players.csv``, read once: bio columns for the features, plus name,
     position, and last season for :func:`non_kicker_names`."""
-    cols = [*_BIO_COLUMNS, "display_name", "position", "last_season"]
+    cols = [*_BIO_COLUMNS, "display_name", "position", "last_season", "status"]
     return pd.read_csv(raw_file(raw_dir, "players.csv"), usecols=cols, low_memory=False)
 
 
 def non_kicker_names(people: pd.DataFrame, feature_season: int) -> set:
-    """Normalized names of non-kickers who played in ``feature_season`` or
-    later (incoming rookies included). Long-retired namesakes don't count:
-    nobody types their name into a draft tool today."""
-    recent = people[(people["position"] != "K") & (people["last_season"] >= feature_season)]
+    """Normalized names of current non-kickers: on an active roster (which
+    covers someone who sat out ``feature_season`` injured) or with a season in
+    ``feature_season`` or later (incoming rookies). Long-retired namesakes
+    don't count: nobody types their name into a draft tool today."""
+    current = (people["status"] == "ACT") | (people["last_season"] >= feature_season)
+    recent = people[(people["position"] != "K") & current]
     return set(recent["display_name"].dropna().map(normalize_name))
 
 

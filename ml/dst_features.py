@@ -89,20 +89,44 @@ def load_team_weeks(raw_dir: Path, seasons: Iterable[int]) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+_GAME_COLUMNS = ("season", "game_type", "week", "home_team", "away_team",
+                 "home_score", "away_score")
+# Used when present: roof type (kicker indoor share) and the stadium, which
+# fills in a roof that games.csv hasn't recorded yet for an upcoming game.
+_OPTIONAL_GAME_COLUMNS = ("roof", "stadium_id")
+
+
 def load_games(raw_dir: Path) -> pd.DataFrame:
-    cols = {"season", "game_type", "week", "home_team", "away_team",
-            "home_score", "away_score", "roof"}
-    return pd.read_csv(raw_file(raw_dir, "games.csv"), usecols=lambda c: c in cols,
-                       low_memory=False)
+    wanted = {*_GAME_COLUMNS, *_OPTIONAL_GAME_COLUMNS}
+    games = pd.read_csv(raw_file(raw_dir, "games.csv"), usecols=lambda c: c in wanted,
+                        low_memory=False)
+    missing = [c for c in _GAME_COLUMNS if c not in games.columns]
+    if missing:
+        raise ValueError(f"games.csv is missing expected columns: {missing}")
+    return games
+
+
+def _roof(games: pd.DataFrame) -> pd.Series:
+    """Each game's roof; a missing one (upcoming games) takes the stadium's
+    most common recorded roof. NaN when neither is known."""
+    if "roof" not in games:
+        return pd.Series(np.nan, index=games.index)
+    roof = games["roof"]
+    if "stadium_id" in games and roof.isna().any():
+        usual = (games.dropna(subset=["roof", "stadium_id"])
+                 .groupby("stadium_id")["roof"].agg(lambda s: s.mode().iat[0]))
+        roof = roof.fillna(games["stadium_id"].map(usual))
+    return roof
 
 
 def team_games(games: pd.DataFrame) -> pd.DataFrame:
     """Regular-season games, one row per team per game (both sides). Shared
     with ``ml/kicker_features.py``.
-    ``indoor`` is 1.0 for a dome or closed roof (NaN without a roof column)."""
+    ``indoor`` is 1.0 for a dome or closed roof, 0.0 otherwise, and NaN when
+    the roof is unknown (so a mean over a schedule skips it)."""
     reg = games[games["game_type"] == "REG"]
-    indoor = (reg["roof"].isin(INDOOR_ROOFS).astype(float) if "roof" in reg
-              else pd.Series(np.nan, index=reg.index))
+    roof = _roof(games).loc[reg.index]
+    indoor = roof.isin(INDOOR_ROOFS).astype(float).where(roof.notna())
     home = pd.DataFrame({
         "season": reg["season"], "week": reg["week"],
         "team": reg["home_team"], "opponent": reg["away_team"],

@@ -72,12 +72,12 @@ def players_csv(n=len(TEAMS), extra=()):
     last season)."""
     rows = [{"gsis_id": f"K{i}", "display_name": f"Kicker {chr(65 + i)}", "position": "K",
              "birth_date": "1995-09-01", "rookie_season": 2005, "draft_round": None,
-             "last_season": 2020}
+             "last_season": 2020, "status": "ACT"}
             for i in range(n)]
     rows += [{"gsis_id": f"X{i}", "display_name": name, "position": pos,
               "birth_date": None, "rookie_season": 2019, "draft_round": 1,
-              "last_season": last}
-             for i, (name, pos, last) in enumerate(extra)]
+              "last_season": last, "status": status}
+             for i, (name, pos, last, status) in enumerate(extra)]
     return pd.DataFrame(rows)
 
 
@@ -220,9 +220,10 @@ def trained(tmp_path_factory):
     games.loc[games.season == 2020, ["home_score", "away_score"]] = np.nan
     games.to_csv(raw / "games.csv", index=False)
     # An incoming WR who shares kicker B's name: kicker B must not be served.
+    # An active TE who missed 2019 hurt shares kicker E's name: not served either.
     # A safety named like kicker C retired long ago: kicker C still is.
-    players_csv(extra=[("Kicker B", "WR", 2020), ("Kicker C", "SAF", 1994)]).to_csv(
-        raw / "players.csv", index=False)
+    players_csv(extra=[("Kicker B", "WR", 2020, "ACT"), ("Kicker E", "TE", 2018, "ACT"),
+                       ("Kicker C", "SAF", 1994, "CUT")]).to_csv(raw / "players.csv", index=False)
     out = root / "kicker.joblib"
     report = train_kicker.run(raw, 2008, 2019, out, root / "reports")
     return {"root": root, "out": out, "report": report}
@@ -245,8 +246,9 @@ def test_artifact_serves_kickers_by_name(trained):
     p = projector.project("kicker d")
     assert (p.player, p.position, p.team, p.scoring) == ("Kicker D", "K", "CIN", "K")
     assert projector.project("kicker b") is None  # also a current WR's name
+    assert projector.project("kicker e") is None  # an active TE who sat out 2019
     assert projector.project("kicker c") is not None  # namesake retired in 1994
-    assert len(projector._players) == len(TEAMS) - 1
+    assert len(projector._players) == len(TEAMS) - 2
     assert Projector.load(trained["out"]) is None  # not a player-model artifact
 
 
@@ -268,3 +270,26 @@ def test_missing_raw_file_says_to_download(tmp_path):
     with pytest.raises(FileNotFoundError) as err:
         D.load_games(tmp_path)
     assert "without --rag-only" in str(err.value) and "--first" not in str(err.value)
+
+
+def test_unknown_roof_takes_the_stadium_roof_or_stays_unknown():
+    games = pd.DataFrame([
+        {"season": 2020, "game_type": "REG", "week": 1, "home_team": "ATL", "away_team": "NO",
+         "home_score": 20, "away_score": 17, "roof": "closed", "stadium_id": "ATL00"},
+        {"season": 2021, "game_type": "REG", "week": 1, "home_team": "ATL", "away_team": "TB",
+         "home_score": None, "away_score": None, "roof": None, "stadium_id": "ATL00"},
+        {"season": 2021, "game_type": "REG", "week": 2, "home_team": "NE", "away_team": "ATL",
+         "home_score": None, "away_score": None, "roof": None, "stadium_id": "NEW00"},
+    ])
+    tg = D.team_games(games)
+    atl = tg[tg.team == "ATL"].set_index(["season", "week"])["indoor"]
+    assert atl.loc[(2021, 1)] == 1.0          # filled from the stadium's other games
+    assert np.isnan(atl.loc[(2021, 2)])       # no record anywhere: unknown, not outdoors
+
+
+def test_games_csv_missing_a_required_column_is_an_error(tmp_path):
+    pd.DataFrame([{"season": 2020, "game_type": "REG", "week": 1, "home_team": "PIT",
+                   "away_team": "LV", "home_points": 3, "away_score": 0}]).to_csv(
+        tmp_path / "games.csv", index=False)
+    with pytest.raises(ValueError, match="home_score"):
+        D.load_games(tmp_path)
