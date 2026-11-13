@@ -114,6 +114,7 @@ def create_analysis():
     verdict = parse_verdict(name, raw_text)
     if projection is not None:
         verdict.projected_ppg = projection.projected_ppg
+        verdict.projection_scoring = projection.scoring
     withheld = raw_text == anthropic_client.WITHHELD_MESSAGE
     notice = NOTICE_WITHHELD if withheld else None
 

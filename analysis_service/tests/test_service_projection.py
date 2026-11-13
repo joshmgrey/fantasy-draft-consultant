@@ -37,3 +37,18 @@ def test_no_projection_returns_null(client, auth_headers, configured, monkeypatc
     res = post(client, auth_headers, player_name="Some Rookie")
     assert res.status_code == 200
     assert res.get_json()["projected_ppg"] is None
+
+
+def test_projection_scoring_is_returned(client, auth_headers, configured, monkeypatch):
+    dst = Projection(
+        player="Pittsburgh Steelers D/ST", position="D/ST", team="PIT", season=2026,
+        projected_ppg=6.4, last_ppg=6.9, last_games=17, typical_error=1.6,
+    )
+    monkeypatch.setattr(projection_model, "project_player", lambda name: dst)
+    monkeypatch.setattr(anthropic_client, "analyze_player", lambda name, **_: CLEAN)
+    body = post(client, auth_headers, player_name="Steelers D/ST").get_json()
+    assert (body["projected_ppg"], body["projection_scoring"]) == (6.4, "D/ST")
+
+    monkeypatch.setattr(projection_model, "project_player", lambda name: SAMPLE)
+    body = post(client, auth_headers, player_name="Ja'Marr Chase").get_json()
+    assert body["projection_scoring"] == "PPR"

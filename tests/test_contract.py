@@ -79,7 +79,7 @@ def test_analyze_response_to_wire_keeps_all_keys():
     keys = set(AnalyzeResponse(player="x").to_wire())
     assert keys == {
         "player", "risk_score", "verdict", "reason", "model", "notice", "analysis_id",
-        "projected_ppg",
+        "projected_ppg", "projection_scoring",
     }
 
 
@@ -93,6 +93,17 @@ def test_projected_ppg_round_trips_and_is_optional():
     # An older service that doesn't send the key still parses.
     del wire["projected_ppg"]
     assert AnalyzeResponse.from_wire(wire).projected_ppg is None
+
+
+def test_projection_scoring_round_trips_and_is_optional():
+    verdict = PlayerVerdict(
+        player="Steelers D/ST", risk_score=4, verdict="Pass", reason="Streamable.",
+        projected_ppg=7.9, projection_scoring="D/ST",
+    )
+    wire = AnalyzeResponse.from_verdict(verdict).to_wire()
+    assert AnalyzeResponse.from_wire(wire).to_verdict() == verdict
+    del wire["projection_scoring"]
+    assert AnalyzeResponse.from_wire(wire).projection_scoring is None
 
 
 @pytest.mark.parametrize("bad", ["18.1", True, [18.1]])
