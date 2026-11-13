@@ -96,8 +96,9 @@ def load_games(raw_dir: Path) -> pd.DataFrame:
                        low_memory=False)
 
 
-def _team_games(games: pd.DataFrame) -> pd.DataFrame:
-    """Regular-season games, one row per team per game (both sides).
+def team_games(games: pd.DataFrame) -> pd.DataFrame:
+    """Regular-season games, one row per team per game (both sides). Shared
+    with ``ml/kicker_features.py``.
     ``indoor`` is 1.0 for a dome or closed roof (NaN without a roof column)."""
     reg = games[games["game_type"] == "REG"]
     indoor = (reg["roof"].isin(INDOOR_ROOFS).astype(float) if "roof" in reg
@@ -127,7 +128,7 @@ def weekly_points(weeks: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     w["opponent_team"] = w["opponent_team"].map(current_abbr)
     w = w.fillna({c: 0 for c in _WEEK_COLUMNS if c not in ("season", "week", "team",
                                                            "season_type", "opponent_team")})
-    scores = _team_games(games)[["season", "week", "team", "points_scored", "points_allowed"]]
+    scores = team_games(games)[["season", "week", "team", "points_scored", "points_allowed"]]
     w = w.merge(scores, on=["season", "week", "team"], how="inner")
 
     # The opponent's offensive row in the same game gives yards allowed.
@@ -188,7 +189,7 @@ def season_rows(weeks: pd.DataFrame, games: pd.DataFrame) -> pd.DataFrame:
     offense["opp_points_pg"] = df["points_scored_pg"]
     offense["opp_giveaways_pg"] = df["giveaways"] / df["games"]
     offense["opp_sacks_taken_pg"] = df["sacks_taken"] / df["games"]
-    sched = _team_games(games)[["season", "team", "opponent"]].copy()
+    sched = team_games(games)[["season", "team", "opponent"]].copy()
     sched["season"] = sched["season"] - 1  # the season whose stats rate it
     sched = sched.merge(
         offense.rename(columns={"team": "opponent"}), on=["season", "opponent"], how="left"

@@ -48,11 +48,11 @@ def raw_file(raw_dir: Path, name: str) -> Path:
     """Path to a downloaded file, or FileNotFoundError saying how to get it."""
     path = Path(raw_dir) / name
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} is missing. Run `python -m ml.download` (it fetches team stats "
-            f"and player stats back to {TEAM_FIRST} for the D/ST and kicker models), "
-            "or pass a later --first."
-        )
+        hint = (f"Run `python -m ml.download` without --rag-only (it fetches team stats "
+                f"and player stats back to {TEAM_FIRST} for the D/ST and kicker models)")
+        if name.startswith(("stats_player_reg_", "stats_team_week_")):
+            hint += ", or train with a later --first"
+        raise FileNotFoundError(f"{path} is missing. {hint}.")
     return path
 
 

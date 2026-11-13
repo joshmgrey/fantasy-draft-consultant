@@ -26,17 +26,17 @@ from typing import Optional
 import pandas as pd
 import sklearn
 
-from analysis_core.projection import DEFAULT_KICKER_ARTIFACT_PATH, KICKER_ARTIFACT_FORMAT
+from analysis_core.projection import (
+    DEFAULT_KICKER_ARTIFACT_PATH,
+    KICKER_ARTIFACT_FORMAT,
+    normalize_name,
+)
 from analysis_core.season import current_season
-
-from analysis_core.projection import normalize_name
 
 from . import kicker_features as K
 from . import rolling
-from .download import raw_file
+from .download import TEAM_FIRST, raw_file
 from .dst_features import load_games
-from .features import load_players
-from .download import TEAM_FIRST
 from .tracking import NullTracker, make_tracker
 
 ML_DIR = Path(__file__).parent
@@ -46,12 +46,22 @@ REPORT_DIR = ML_DIR / "reports"
 EXPERIMENT = "kicker-projection"
 
 
-def non_kicker_names(raw_dir: Path) -> set:
-    """Normalized names of every non-kicker in ``players.csv`` (rookies included)."""
-    people = pd.read_csv(raw_file(raw_dir, "players.csv"),
-                         usecols=["display_name", "position"], low_memory=False)
-    others = people[people["position"] != "K"]["display_name"].dropna()
-    return set(others.map(normalize_name))
+_BIO_COLUMNS = ["gsis_id", "birth_date", "rookie_season"]
+
+
+def load_people(raw_dir: Path) -> pd.DataFrame:
+    """``players.csv``, read once: bio columns for the features, plus name,
+    position, and last season for :func:`non_kicker_names`."""
+    cols = [*_BIO_COLUMNS, "display_name", "position", "last_season"]
+    return pd.read_csv(raw_file(raw_dir, "players.csv"), usecols=cols, low_memory=False)
+
+
+def non_kicker_names(people: pd.DataFrame, feature_season: int) -> set:
+    """Normalized names of non-kickers who played in ``feature_season`` or
+    later (incoming rookies included). Long-retired namesakes don't count:
+    nobody types their name into a draft tool today."""
+    recent = people[(people["position"] != "K") & (people["last_season"] >= feature_season)]
+    return set(recent["display_name"].dropna().map(normalize_name))
 
 
 def serving_kickers(rows: pd.DataFrame, feature_season: int, ambiguous=frozenset()) -> dict:
@@ -86,7 +96,8 @@ def run(raw_dir: Path, first: int, last: int, out: Path, report_dir: Path,
 
 def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
     stats = K.load_kicking(raw_dir, range(first, last + 1))
-    rows = K.season_rows(stats, load_players(raw_dir), load_games(raw_dir))
+    people = load_people(raw_dir)
+    rows = K.season_rows(stats, people[_BIO_COLUMNS], load_games(raw_dir))
     table = K.training_table(rows)
 
     tracker.log_params({
@@ -117,7 +128,7 @@ def _run(raw_dir, first, last, out, report_dir, tracker, register) -> dict:
         "model_name": best.name,
         "test_mae": report["test"]["model"]["mae"],
         "mlflow_run_id": tracker.run_id,
-        "players": serving_kickers(rows, last, non_kicker_names(raw_dir)),
+        "players": serving_kickers(rows, last, non_kicker_names(people, last)),
     }
     tracker.log_params({f"chosen_{k}": v for k, v in best.params.items()})
     rolling.save_and_track(

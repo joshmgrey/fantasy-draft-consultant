@@ -10,7 +10,7 @@ checks that no t + 1 result leaks into the features.
 Inputs are nflverse files (https://github.com/nflverse/nflverse-data):
 
 * ``stats_player_reg_<season>.csv`` — regular-season kicking totals
-* ``players.csv`` — birth date, rookie season (``ml.features.load_players``)
+* ``players.csv`` — birth date, rookie season (read by ``ml.train_kicker.load_people``)
 * ``games.csv`` — final scores, roof type, and future schedules
   (``ml.dst_features.load_games``)
 
@@ -30,7 +30,7 @@ from analysis_core.projection import normalize_name
 from analysis_core.teams import current_abbr
 
 from .download import raw_file
-from .dst_features import _team_games
+from .dst_features import team_games
 
 SCORING = {
     "pat_made": 1,
@@ -79,11 +79,16 @@ def load_kicking(raw_dir: Path, seasons: Iterable[int]) -> pd.DataFrame:
 
 
 def blocked_by_distance(blocked_list: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """Blocked field goals at 40–49 and at 50+ yards, from ``fg_blocked_list``."""
+    """Blocked field goals at 40–49 and at 50+ yards, from ``fg_blocked_list``.
+    Tokens that aren't numbers are ignored rather than failing training."""
+    def distances(text):
+        if not isinstance(text, str):
+            return []
+        values = pd.to_numeric(pd.Series(text.split(";")).str.strip(), errors="coerce")
+        return values.dropna().tolist()
+
     def count(text, lo, hi):
-        if not isinstance(text, str) or not text.strip():
-            return 0
-        return sum(lo <= float(d) < hi for d in text.split(";") if d.strip())
+        return sum(lo <= d < hi for d in distances(text))
 
     return (blocked_list.map(lambda t: count(t, 40, 50)),
             blocked_list.map(lambda t: count(t, 50, 1000)))
@@ -139,7 +144,7 @@ def season_rows(stats: pd.DataFrame, players: pd.DataFrame, games: pd.DataFrame)
     df["age"] = (kickoff - birth).dt.days / 365.25
     df["years_exp"] = (df["season"] - df["rookie_season"] + 1).clip(lower=1)
 
-    tg = _team_games(games)
+    tg = team_games(games)
     team_season = tg.groupby(["team", "season"]).agg(
         team_points_pg=("points_scored", "mean"),
         points_allowed_pg=("points_allowed", "mean"),

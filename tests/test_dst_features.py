@@ -146,7 +146,7 @@ def test_season_ppg_is_mean_of_weekly_points(league):
 def test_schedule_strength_uses_next_seasons_opponents_rated_by_this_season(league):
     weeks, games, rows = league
     pit = rows[(rows.team == "PIT") & (rows.season == 2019)].iloc[0]
-    sched = D._team_games(games)
+    sched = D.team_games(games)
     opps = sched[(sched.team == "PIT") & (sched.season == 2020)]["opponent"]
     off = rows[rows.season == 2019].set_index("team")["points_scored_pg"]
     assert pit["sched_opp_points_pg"] == pytest.approx(off.loc[opps].mean())
