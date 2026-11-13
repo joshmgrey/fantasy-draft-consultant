@@ -104,8 +104,9 @@ When evaluating a player, you MUST:
 2. Search for recent news (trades, depth chart changes, target share, snap counts)
 3. Search for injury history and current injury risk
 
-The request may include a <model_projection trust_level="trusted"> block: the PPR
-points-per-game projection from our own statistical model, built only from past stats.
+The request may include a <model_projection trust_level="trusted"> block: the
+points-per-game projection from our own statistical model, built only from past stats
+(PPR scoring for a player, standard D/ST scoring for a team defense).
 Use it as one input. Where current news (a trade, a new role, an injury) changes the
 picture, trust the news over the model.
 

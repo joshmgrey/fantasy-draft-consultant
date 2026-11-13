@@ -1,0 +1,232 @@
+{
+  "trained_on": "2026-11-13",
+  "data": "nflverse stats_team_week + games (CC-BY 4.0)",
+  "scoring": {
+    "sacks": 1,
+    "interceptions": 2,
+    "fumble_recoveries": 2,
+    "safeties": 2,
+    "touchdowns": 6,
+    "blocked_kicks": 2,
+    "points_allowed_tiers": [
+      [
+        0,
+        10
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        13,
+        4
+      ],
+      [
+        20,
+        1
+      ],
+      [
+        27,
+        0
+      ],
+      [
+        34,
+        -1
+      ]
+    ],
+    "points_allowed_floor": -4
+  },
+  "seasons": [
+    2002,
+    2025
+  ],
+  "rows": {
+    "train": 704,
+    "test": 32,
+    "final": 736
+  },
+  "split": {
+    "validation_target_seasons": [
+      2021,
+      2024
+    ],
+    "test_target_season": 2025
+  },
+  "chosen_model": "ridge(alpha=100.0)",
+  "validation_leaderboard": [
+    {
+      "model": "ridge(alpha=100.0)",
+      "mae": 1.327,
+      "mae_by_season": {
+        "2021": 1.278,
+        "2022": 1.03,
+        "2023": 1.34,
+        "2024": 1.662
+      }
+    },
+    {
+      "model": "ridge(alpha=10.0)",
+      "mae": 1.34,
+      "mae_by_season": {
+        "2021": 1.282,
+        "2022": 1.028,
+        "2023": 1.376,
+        "2024": 1.673
+      }
+    },
+    {
+      "model": "ridge(alpha=1.0)",
+      "mae": 1.342,
+      "mae_by_season": {
+        "2021": 1.286,
+        "2022": 1.029,
+        "2023": 1.381,
+        "2024": 1.674
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=3)",
+      "mae": 1.408,
+      "mae_by_season": {
+        "2021": 1.237,
+        "2022": 1.308,
+        "2023": 1.48,
+        "2024": 1.606
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=3)",
+      "mae": 1.409,
+      "mae_by_season": {
+        "2021": 1.276,
+        "2022": 1.275,
+        "2023": 1.461,
+        "2024": 1.624
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=3)",
+      "mae": 1.409,
+      "mae_by_season": {
+        "2021": 1.219,
+        "2022": 1.323,
+        "2023": 1.558,
+        "2024": 1.537
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=3)",
+      "mae": 1.422,
+      "mae_by_season": {
+        "2021": 1.24,
+        "2022": 1.315,
+        "2023": 1.548,
+        "2024": 1.584
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=50,depth=5)",
+      "mae": 1.43,
+      "mae_by_season": {
+        "2021": 1.261,
+        "2022": 1.334,
+        "2023": 1.567,
+        "2024": 1.557
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=50,depth=5)",
+      "mae": 1.433,
+      "mae_by_season": {
+        "2021": 1.219,
+        "2022": 1.375,
+        "2023": 1.543,
+        "2024": 1.594
+      }
+    },
+    {
+      "model": "hgb(lr=0.06,leaf=20,depth=5)",
+      "mae": 1.457,
+      "mae_by_season": {
+        "2021": 1.31,
+        "2022": 1.364,
+        "2023": 1.467,
+        "2024": 1.686
+      }
+    },
+    {
+      "model": "hgb(lr=0.03,leaf=20,depth=5)",
+      "mae": 1.464,
+      "mae_by_season": {
+        "2021": 1.313,
+        "2022": 1.329,
+        "2023": 1.55,
+        "2024": 1.662
+      }
+    },
+    {
+      "model": "baseline: league_average",
+      "mae": 1.509,
+      "mae_by_season": {
+        "2021": 1.673,
+        "2022": 1.402,
+        "2023": 1.318,
+        "2024": 1.641
+      }
+    },
+    {
+      "model": "baseline: last_season",
+      "mae": 1.674,
+      "mae_by_season": {
+        "2021": 1.526,
+        "2022": 1.471,
+        "2023": 1.555,
+        "2024": 2.143
+      }
+    }
+  ],
+  "test": {
+    "model": {
+      "n": 32,
+      "mae": 1.551,
+      "rmse": 1.772,
+      "spearman": 0.129
+    },
+    "baseline_last_season": {
+      "n": 32,
+      "mae": 1.653,
+      "rmse": 2.034,
+      "spearman": 0.323
+    },
+    "baseline_league_average": {
+      "n": 32,
+      "mae": 1.69,
+      "rmse": 2.033,
+      "spearman": null
+    }
+  },
+  "backtest": {
+    "target_seasons": [
+      2010,
+      2025
+    ],
+    "model": {
+      "mae": 1.488,
+      "spearman": 0.271
+    },
+    "baseline_last_season": {
+      "mae": 1.826,
+      "spearman": 0.282
+    },
+    "baseline_league_average": {
+      "mae": 1.649,
+      "spearman": null
+    }
+  },
+  "test_mae_improvement_pct": {
+    "vs_last_season": 6.2,
+    "vs_league_average": 8.2
+  },
+  "sklearn_version": "1.9.1",
+  "mlflow_run_id": "dec34acb491d4f51bc05dc34990b12ca"
+}

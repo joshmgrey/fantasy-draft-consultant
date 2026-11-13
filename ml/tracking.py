@@ -95,8 +95,9 @@ class NullTracker:
 
 class MlflowTracker(NullTracker):
     def __init__(self, mlflow, *, tracking_uri: str, experiment: str = EXPERIMENT,
-                 run_name: Optional[str] = None):
+                 run_name: Optional[str] = None, registered_model: str = REGISTERED_MODEL):
         self._mlflow = mlflow
+        self._registered_model = registered_model
         self._tracking_uri = tracking_uri
         self._experiment = experiment
         self._run_name = run_name
@@ -141,7 +142,7 @@ class MlflowTracker(NullTracker):
             model,
             name="model",
             signature=infer_signature(example, model.predict(example)),
-            registered_model_name=REGISTERED_MODEL if register else None,
+            registered_model_name=self._registered_model if register else None,
             skops_trusted_types=skops_trusted_types(model),
         )
         version = getattr(info, "registered_model_version", None)
@@ -163,7 +164,8 @@ def skops_trusted_types(model) -> list[str]:
 
 
 def make_tracker(*, enabled: bool = True, tracking_uri: Optional[str] = None,
-                 run_name: Optional[str] = None) -> NullTracker:
+                 run_name: Optional[str] = None, experiment: str = EXPERIMENT,
+                 registered_model: str = REGISTERED_MODEL) -> NullTracker:
     """An MLflow tracker, or a :class:`NullTracker` when disabled or when
     MLflow isn't installed (logged, not raised)."""
     if not enabled:
@@ -176,4 +178,5 @@ def make_tracker(*, enabled: bool = True, tracking_uri: Optional[str] = None,
                     "pip install -r requirements-dev.txt to enable it.")
         return NullTracker()
     return MlflowTracker(mlflow, tracking_uri=tracking_uri or default_tracking_uri(),
-                         run_name=run_name)
+                         experiment=experiment, run_name=run_name,
+                         registered_model=registered_model)

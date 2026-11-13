@@ -131,6 +131,8 @@ class AnalyzeResponse:
     # Added in v1 as an optional field: older services omit it, and readers
     # treat a missing key as null.
     projected_ppg: Optional[float] = None
+    # Optional too: "PPR" or "D/ST", the scoring projected_ppg is in.
+    projection_scoring: Optional[str] = None
 
     def to_wire(self) -> dict:
         return {
@@ -142,6 +144,7 @@ class AnalyzeResponse:
             "notice": self.notice,
             "analysis_id": self.analysis_id,
             "projected_ppg": self.projected_ppg,
+            "projection_scoring": self.projection_scoring,
         }
 
     @classmethod
@@ -169,6 +172,7 @@ class AnalyzeResponse:
             notice=_opt_str(data.get("notice"), "notice"),
             analysis_id=_opt_str(data.get("analysis_id"), "analysis_id"),
             projected_ppg=None if projected is None else float(projected),
+            projection_scoring=_opt_str(data.get("projection_scoring"), "projection_scoring"),
         )
 
     @classmethod
@@ -189,6 +193,7 @@ class AnalyzeResponse:
             notice=notice,
             analysis_id=analysis_id,
             projected_ppg=verdict.projected_ppg,
+            projection_scoring=verdict.projection_scoring,
         )
 
     def to_verdict(self) -> PlayerVerdict:
@@ -198,6 +203,7 @@ class AnalyzeResponse:
             verdict=self.verdict,
             reason=self.reason,
             projected_ppg=self.projected_ppg,
+            projection_scoring=self.projection_scoring,
         )
 
 

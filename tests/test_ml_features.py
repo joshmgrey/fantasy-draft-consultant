@@ -192,7 +192,8 @@ def test_download_fetches_each_season_and_players(tmp_path, monkeypatch):
 
     fetched = []
     monkeypatch.setattr(download, "fetch", lambda url, dest: fetched.append((url, dest.name)))
-    download.main(["--first", "2020", "--last", "2021", "--out", str(tmp_path)])
+    download.main(["--first", "2020", "--last", "2021", "--team-first", "2019",
+                   "--out", str(tmp_path)])
     assert fetched == [
         (download.stats_url(2020), "stats_player_reg_2020.csv"),
         (download.injuries_url(2020), "injuries_2020.csv"),
@@ -200,6 +201,11 @@ def test_download_fetches_each_season_and_players(tmp_path, monkeypatch):
         (download.stats_url(2021), "stats_player_reg_2021.csv"),
         (download.injuries_url(2021), "injuries_2021.csv"),
         (download.snap_counts_url(2021), "snap_counts_2021.csv"),
+        # D/ST model: team stats reach back further, plus every game's score.
+        (download.team_weeks_url(2019), "stats_team_week_2019.csv"),
+        (download.team_weeks_url(2020), "stats_team_week_2020.csv"),
+        (download.team_weeks_url(2021), "stats_team_week_2021.csv"),
+        (download.GAMES_URL, "games.csv"),
         (download.PLAYERS_URL, "players.csv"),
     ]
 

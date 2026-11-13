@@ -127,7 +127,7 @@ def test_projector_is_loaded_once(model_path, monkeypatch):
     model_path()
     calls = []
     real_load = Projector.load
-    monkeypatch.setattr(Projector, "load", classmethod(lambda cls, p: calls.append(p) or real_load(p)))
+    monkeypatch.setattr(Projector, "load", classmethod(lambda cls, p, *a: calls.append(p) or real_load(p, *a)))
     project_player("Ja'Marr Chase")
     project_player("Kenneth Walker")
     assert len(calls) == 1

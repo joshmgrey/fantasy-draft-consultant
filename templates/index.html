@@ -519,7 +519,9 @@
       const projSection = document.getElementById('projectionSection');
       if (typeof d.projected_ppg === 'number') {
         document.getElementById('resultProjection').textContent =
-          d.projected_ppg.toFixed(1) + ' PPR points per game (stats-only model)';
+          d.projected_ppg.toFixed(1) +
+          (d.projection_scoring === 'D/ST' ? ' D/ST fantasy points' : ' PPR points') +
+          ' per game (stats-only model)';
         projSection.style.display = '';
       } else {
         projSection.style.display = 'none';

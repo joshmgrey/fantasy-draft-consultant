@@ -98,6 +98,37 @@ MLflow is training-only and optional: `--no-mlflow` trains without it, and the s
 
 Retrain each May after the season rolls over, and whenever the scikit-learn pin changes.
 
+### D/ST projection model
+
+Team defenses get their own model, since nothing about a D/ST looks like a player's box score.
+A typed name such as "Steelers D/ST", "49ers Defense" or "PIT DST" is recognized by
+`analysis_core/teams.py` and projected by this model; everything else goes to the player model.
+
+| | |
+|---|---|
+| **Data** | [nflverse](https://github.com/nflverse/nflverse-data) per-game team stats and final scores, 2002–2025 (CC-BY 4.0) |
+| **Scoring** | Standard D/ST: sack 1, INT 2, fumble recovery 2, safety 2, defensive/return TD 6, blocked kick 2, plus points-allowed tiers (shutout +10 down to 35+ allowed −4) |
+| **Features** | Last season's D/ST points per game, the season before, per-game sacks, QB hits, INTs, passes defended, forced fumbles, recoveries, TDs, blocks, points and yards allowed, own points scored, and **next season's schedule** rated by the opponents' offenses (published each May, so known before any draft) |
+| **Label** | D/ST fantasy points per game the following season |
+| **Selection** | 32 teams a season is too few to pick a model on one season, so candidates are ranked by mean MAE over four rolling validation seasons (2021–2024); 2025 is scored once |
+| **Model** | Ridge regression (`alpha=100`) |
+
+**Results.** Over a 16-season rolling backtest (2010–2025) the model's error is **1.49** points per
+game, vs **1.83** for "same as last season" and **1.65** for the league average. On the held-out 2025
+season alone it is 1.55 vs 1.65 and 1.69. It ranks teams about as well as last season's finish does
+(Spearman 0.27 vs 0.28), no better: D/ST scoring is mostly turnovers and return TDs, which barely carry
+over year to year. The gain is in *level* — pulling outlier seasons back toward the average — so use it
+as a check on a D/ST's price, not as a ranking. Full results: [`ml/reports/DST_REPORT.md`](ml/reports/DST_REPORT.md).
+
+```bash
+python -m ml.download                   # also fetches team stats (2002+) and games.csv
+python -m ml.train_dst                  # writes analysis_core/artifacts/dst_projection.joblib + ml/reports/DST_REPORT.md
+```
+
+It is served, falls back, and is tracked (MLflow experiment and registered model `dst-projection`)
+the same way as the player model. The API's optional `projection_scoring` field says which scoring
+`projected_ppg` is in (`"PPR"` or `"D/ST"`).
+
 ---
 
 ## Retrieval (RAG): injury history from pgvector
@@ -327,6 +358,7 @@ analysis-service-down demo, and teardown.
 | `ANALYSIS_DATABASE_URL` | PostgreSQL URL for the **analysis service's own** database |
 | `PUBLIC_URL` | Optional. Absolute site URL used in link previews (`og:url`, `og:image`); default `https://fantasy-football-draft-consultant.com` |
 | `PROJECTION_MODEL_PATH` | Optional. Path to the projection model artifact (default `analysis_core/artifacts/ppr_projection.joblib`) |
+| `DST_PROJECTION_MODEL_PATH` | Optional. Path to the D/ST projection artifact (default `analysis_core/artifacts/dst_projection.joblib`) |
 | `RAG_DATABASE_URL` | Optional. Postgres (with pgvector) holding the retrieval collection; unset disables retrieval. On the analysis service in `http` mode, on core in `inprocess` mode |
 | `FASTEMBED_CACHE_PATH` | Optional. Where the embedding model is cached (the Docker images bake it into `/app/.fastembed`) |
 
@@ -446,17 +478,20 @@ fantasy-draft-consultant/
 │   ├── season.py                   # season calendar (rolls over May 1, after the NFL Draft)
 │   ├── anthropic_client.py         # the Claude agent (web_search, retry, prompt hardening)
 │   ├── contract.py                 # wire schemas + HMAC actor-token helpers
-│   ├── projection.py               # serves the PPR projection model (lookup, fallbacks)
+│   ├── projection.py               # serves the PPR and D/ST projection models (lookup, fallbacks)
+│   ├── teams.py                    # NFL teams; recognizes a D/ST in a typed name
 │   ├── retrieval.py                # RAG: fastembed + LangChain PGVector injury-history search
-│   └── artifacts/ppr_projection.joblib  # trained model + latest-season features
+│   └── artifacts/                  # ppr_projection.joblib, dst_projection.joblib (model + latest-season features)
 │
 ├── ml/                             # Offline training (not deployed)
 │   ├── download.py                 # nflverse CSVs -> ml/data/raw/ (gitignored)
 │   ├── features.py                 # feature engineering (no future-season leakage)
 │   ├── train.py                    # season-based split, model selection, export
+│   ├── dst_features.py             # D/ST scoring + team-season features (incl. next-season schedule)
+│   ├── train_dst.py                # D/ST model: rolling validation, backtest, export
 │   ├── tracking.py                 # MLflow runs + model registry (optional)
 │   ├── rag/                        # retrieval corpus: documents.py, index.py, evaluate.py
-│   └── reports/                    # REPORT.md, RAG_REPORT.md + their metrics JSON
+│   └── reports/                    # REPORT.md, DST_REPORT.md, RAG_REPORT.md + their metrics JSON
 │
 ├── app/                            # Core service
 │   ├── __init__.py                 # app factory; selects the analysis client

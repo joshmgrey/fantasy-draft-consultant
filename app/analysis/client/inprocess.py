@@ -57,4 +57,5 @@ class InProcessAnalysisClient:
         verdict = parse_verdict(name, raw_text)
         if projection is not None:
             verdict.projected_ppg = projection.projected_ppg
+            verdict.projection_scoring = projection.scoring
         return verdict
